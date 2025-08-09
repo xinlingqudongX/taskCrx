@@ -1,0 +1,30 @@
+{
+    "type": "object",
+    "properties": {
+        "cc_domains_v2": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "cc_tasks_v2": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string" },
+                    "domain": { "type": "string" },
+                    "name": { "type": "string" },
+                    "cron": { "type": "string" },
+                    "targetUrl": { "type": "string" },
+                    "headers": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    },
+                    "enabled": { "type": "boolean" },
+                    "concurrent": { "type": "number" }
+                }
+            }
+        }
+    }
+}
