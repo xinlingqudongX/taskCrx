@@ -31,6 +31,7 @@ export default defineManifest({
         "https://*/*",
         "https://*/",
         "http://*/",
+        "https://appstoreconnect.apple.com/*",
     ],
     background: {
         service_worker: "background.ts",

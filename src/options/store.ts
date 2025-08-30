@@ -1,17 +1,12 @@
 import { reactive } from "vue";
+import type { Task as BackgroundTask, AppDataConfig } from "../types/index";
 
-// 定义任务接口
-interface Task {
-    id: string;
-    domain: string;
-    name: string;
-    status: string;
-    lastRun: Date | null;
+// 定义前端任务接口（继承后端类型并添加前端特有字段）
+interface Task extends Omit<BackgroundTask, "targetUrl" | "lastRun"> {
+    status: string; // 前端显示用的状态
+    lastRun: Date | null; // 前端使用 Date 对象
     nextRun: Date | null;
-    apiEndpoint: string;
-    headers: Record<string, string>;
-    cron?: string;
-    enabled: boolean;
+    apiEndpoint: string; // 对应 targetUrl
 }
 
 class DomainStore {
@@ -48,6 +43,13 @@ class DomainStore {
                     lastRun: task.lastRun ? new Date(task.lastRun) : null,
                     nextRun: null, // 这个信息在background中维护
                     apiEndpoint: task.targetUrl || "",
+                    // 支持应用数据相关字段
+                    includeAppData: task.includeAppData || false,
+                    appDataConfig: task.appDataConfig || {
+                        collectUserInfo: false,
+                        collectAppList: false,
+                        maxApps: 50,
+                    },
                 }));
             }
         } catch (error) {
@@ -65,6 +67,14 @@ class DomainStore {
                     apiEndpoint: "",
                     headers: {},
                     enabled: true,
+                    includeAppData: false,
+                    appDataConfig: {
+                        collectUserInfo: false,
+                        collectAppList: false,
+                        maxApps: 50,
+                        collectAppleApps: false,
+                        maxAppleApps: 200,
+                    },
                 },
                 {
                     id: "2",
@@ -76,6 +86,14 @@ class DomainStore {
                     apiEndpoint: "",
                     headers: {},
                     enabled: false,
+                    includeAppData: false,
+                    appDataConfig: {
+                        collectUserInfo: false,
+                        collectAppList: false,
+                        maxApps: 50,
+                        collectAppleApps: false,
+                        maxAppleApps: 200,
+                    },
                 },
             ];
         }
@@ -159,6 +177,14 @@ class DomainStore {
                 cron: taskData.cron || "",
                 enabled:
                     taskData.status === "启用" || taskData.enabled !== false,
+                includeAppData: taskData.includeAppData || false,
+                appDataConfig: taskData.appDataConfig || {
+                    collectUserInfo: false,
+                    collectAppList: false,
+                    maxApps: 50,
+                    collectAppleApps: false,
+                    maxAppleApps: 200,
+                },
             };
 
             try {
@@ -172,6 +198,8 @@ class DomainStore {
                         targetUrl: newTask.apiEndpoint,
                         headers: newTask.headers,
                         enabled: newTask.enabled,
+                        includeAppData: newTask.includeAppData,
+                        appDataConfig: newTask.appDataConfig,
                     },
                 });
                 this.state.tasks.push(newTask);
@@ -230,6 +258,8 @@ class DomainStore {
                         targetUrl: task.apiEndpoint,
                         headers: task.headers,
                         enabled: task.enabled,
+                        includeAppData: task.includeAppData,
+                        appDataConfig: task.appDataConfig,
                     },
                 });
                 console.log(`更新任务配置: ${domain}`);
@@ -267,7 +297,7 @@ class DomainStore {
                 return response;
             } catch (error) {
                 console.error("发送任务执行请求失败", error);
-                return { ok: false, error: error.message };
+                return { ok: false, error: (error as Error).message };
             }
         }
         return { ok: false, error: "任务不存在" };
@@ -342,13 +372,20 @@ class DomainStore {
                 lastRun: task.lastRun ? new Date(task.lastRun) : null,
                 nextRun: task.nextRun ? new Date(task.nextRun) : null,
                 apiEndpoint: task.targetUrl || "",
+                // 支持应用数据相关字段
+                includeAppData: task.includeAppData || false,
+                appDataConfig: task.appDataConfig || {
+                    collectUserInfo: false,
+                    collectAppList: false,
+                    maxApps: 50,
+                },
             }));
 
             console.log(`成功导入 ${data.tasks.length} 个任务`);
             return { success: true, count: data.tasks.length };
         } catch (error) {
             console.error("导入任务失败", error);
-            return { success: false, error: error.message };
+            return { success: false, error: (error as Error).message };
         }
     }
 }

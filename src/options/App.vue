@@ -151,6 +151,78 @@
                     <template #unchecked>禁用</template>
                 </n-switch>
             </n-form-item>
+            
+            <!-- 应用数据收集配置 -->
+            <n-divider title-placement="left">应用数据收集配置</n-divider>
+            
+            <n-form-item label="启用应用数据收集" path="includeAppData">
+                <n-switch v-model:value="taskFormValue.includeAppData">
+                    <template #checked>启用</template>
+                    <template #unchecked>禁用</template>
+                </n-switch>
+                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                    启用后将在任务执行时收集极光推送应用数据
+                </n-text>
+            </n-form-item>
+            
+            <template v-if="taskFormValue.includeAppData">
+                <n-form-item label="收集用户信息" path="collectUserInfo">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectUserInfo">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                </n-form-item>
+                
+                <n-form-item label="收集应用列表" path="collectAppList">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectAppList">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                </n-form-item>
+                
+                <n-form-item label="最大应用数量" path="maxApps">
+                    <n-input-number
+                        v-model:value="taskFormValue.appDataConfig.maxApps"
+                        :min="1"
+                        :max="1000"
+                        placeholder="请输入最大应用数量"
+                        style="width: 200px;"
+                    />
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        限制收集的应用数量，防止请求过大
+                    </n-text>
+                </n-form-item>
+                
+                <!-- 苹果应用数据收集配置 -->
+                <n-divider title-placement="left">苹果开发者应用数据</n-divider>
+                
+                <n-form-item label="收集苹果应用" path="collectAppleApps">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectAppleApps">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        从Apple App Store Connect收集应用数据（需要苹果开发者账号Cookie）
+                    </n-text>
+                </n-form-item>
+                
+                <n-form-item 
+                    v-if="taskFormValue.appDataConfig.collectAppleApps" 
+                    label="苹果应用最大数量" 
+                    path="maxAppleApps"
+                >
+                    <n-input-number
+                        v-model:value="taskFormValue.appDataConfig.maxAppleApps"
+                        :min="1"
+                        :max="1000"
+                        placeholder="请输入苹果应用最大数量"
+                        style="width: 200px;"
+                    />
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        限制收集的苹果应用数量
+                    </n-text>
+                </n-form-item>
+            </template>
         </n-form>
         <template #action>
             <n-space>
@@ -170,6 +242,7 @@ import {
     NModal,
     NSpace,
     NInput,
+    NInputNumber,
     NForm,
     NFormItem,
     NIcon,
@@ -178,6 +251,8 @@ import {
     NTag,
     NSelect,
     NSwitch,
+    NDivider,
+    NText,
 } from "naive-ui";
 import {
     InformationCircleOutline,
@@ -209,6 +284,14 @@ const taskFormValue = reactive({
     apiEndpoint: "",
     headers: "",
     enabled: true,
+    includeAppData: false,
+    appDataConfig: {
+        collectUserInfo: false,
+        collectAppList: false,
+        maxApps: 50,
+        collectAppleApps: false,
+        maxAppleApps: 200,
+    },
 });
 
 const rules = {
@@ -312,6 +395,14 @@ const openAddTaskModal = () => {
     taskFormValue.apiEndpoint = "";
     taskFormValue.headers = "";
     taskFormValue.enabled = true;
+    taskFormValue.includeAppData = false;
+    taskFormValue.appDataConfig = {
+        collectUserInfo: false,
+        collectAppList: false,
+        maxApps: 50,
+        collectAppleApps: false,
+        maxAppleApps: 200,
+    };
     taskModalVisible.value = true;
 };
 
@@ -326,6 +417,14 @@ const openEditTaskModal = (task) => {
         ? JSON.stringify(task.headers, null, 2)
         : "";
     taskFormValue.enabled = task.enabled;
+    taskFormValue.includeAppData = task.includeAppData || false;
+    taskFormValue.appDataConfig = task.appDataConfig || {
+        collectUserInfo: false,
+        collectAppList: false,
+        maxApps: 50,
+        collectAppleApps: false,
+        maxAppleApps: 200,
+    };
     taskModalVisible.value = true;
 };
 
@@ -351,16 +450,16 @@ const handleAddDomain = (e) => {
 const handleSaveTask = async (e) => {
     e.preventDefault();
     // 直接在options页面请求权限
-    const url = URL.parse(taskFormValue.apiEndpoint);
-    const domain = url.host;
-    const granted = await chrome.permissions.request({
-        origins: [`*://*.${domain}/*`],
-    });
+    // const url = URL.parse(taskFormValue.apiEndpoint);
+    // const domain = url.host;
+    // const granted = await chrome.permissions.request({
+    //     origins: [`*://*.${domain}/*`],
+    // });
 
-    if (!granted) {
-        console.log(`用户拒绝了对域名 ${domain} 的权限请求`);
-        return false;
-    }
+    // if (!granted) {
+    //     console.log(`用户拒绝了对域名 ${domain} 的权限请求`);
+    //     return false;
+    // }
     taskFormRef.value?.validate((errors) => {
         if (!errors) {
             // 解析请求头
@@ -382,6 +481,8 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
+                    includeAppData: taskFormValue.includeAppData,
+                    appDataConfig: taskFormValue.appDataConfig,
                 });
             } else {
                 // 添加新任务
@@ -393,6 +494,8 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
+                    includeAppData: taskFormValue.includeAppData,
+                    appDataConfig: taskFormValue.appDataConfig,
                 });
             }
 

@@ -185,6 +185,56 @@ const taskColumns = [
         width: 150,
     },
     {
+        title: "应用数据",
+        key: "includeAppData",
+        render: (row) => {
+            if (!row.includeAppData) {
+                return h(
+                    NTag,
+                    {
+                        type: "default",
+                        size: "small",
+                    },
+                    { default: () => "未启用" }
+                );
+            }
+            
+            const config = row.appDataConfig || {};
+            const features = [];
+            if (config.collectUserInfo) features.push("用户信息");
+            if (config.collectAppList) features.push("应用列表");
+            if (config.maxApps) features.push(`限制${config.maxApps}个`);
+            
+            const tooltip = features.length > 0 ? features.join(", ") : "基础配置";
+            
+            return h(
+                "div",
+                {
+                    title: tooltip,
+                    style: "cursor: help;",
+                },
+                [
+                    h(
+                        NTag,
+                        {
+                            type: "info",
+                            size: "small",
+                        },
+                        { default: () => "已启用" }
+                    ),
+                    features.length > 0 && h(
+                        "div",
+                        {
+                            style: "font-size: 11px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;",
+                        },
+                        tooltip
+                    )
+                ]
+            );
+        },
+        width: 100,
+    },
+    {
         title: "API端点",
         key: "apiEndpoint",
         render: (row) =>

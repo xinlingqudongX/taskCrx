@@ -11,7 +11,11 @@ export default defineConfig({
     plugins: [
         vue(),
         crx({ manifest }),
-        zip({ outDir: "release", outFileName: "release.zip" }),
+        zip({
+            inDir: "src/dist",
+            outDir: "release",
+            outFileName: "release.zip",
+        }),
     ],
     server: {
         host: "localhost",

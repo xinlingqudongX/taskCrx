@@ -1,4 +1,10 @@
 // src/background.ts
+import {
+    collectAllAppData,
+    getJiguangTokenFromCookie,
+} from "./utils/app-collector";
+import type { CollectedAppData, Task, TaskExecutionData } from "./types/index";
+
 const USE_SYNC_STORAGE = true;
 
 // 修改存储相关函数以支持同步
@@ -38,17 +44,209 @@ async function setDomains(domains: string[]): Promise<void> {
     });
 }
 
-type Task = {
-    id: string;
-    domain: string;
-    name: string;
-    cron: string;
-    targetUrl: string;
-    headers: Record<string, string>;
-    enabled: boolean;
-    concurrent?: number;
-    lastRun?: number;
-};
+/**
+ * 获取指定域名的localStorage数据
+ * @param {string} domain - 域名
+ * @param {string[]} keys - 需要获取的键名列表，为空则获取所有
+ * @returns {Promise<{success: boolean, data?: Record<string, any>, error?: string}>} 返回结果
+ */
+async function getWebPageLocalStorage(
+    domain: string,
+    keys?: string[]
+): Promise<{
+    success: boolean;
+    data?: Record<string, any>;
+    error?: string;
+}> {
+    try {
+        // 获取该域名下的所有标签页
+        const tabs = await chrome.tabs.query({ url: `*://*.${domain}/*` });
+
+        if (tabs.length === 0) {
+            return {
+                success: false,
+                error: `未找到域名 ${domain} 的打开标签页`,
+            };
+        }
+
+        // 使用第一个匹配的标签页
+        const tab = tabs[0];
+
+        if (!tab.id) {
+            return {
+                success: false,
+                error: "无效的标签页ID",
+            };
+        }
+
+        // 发送消息到content script
+        const messageType =
+            keys && keys.length > 0
+                ? "GET_LOCALSTORAGE_ITEMS"
+                : "GET_LOCALSTORAGE_ALL";
+
+        const message =
+            keys && keys.length > 0
+                ? { type: messageType, keys }
+                : { type: messageType };
+
+        const response = await chrome.tabs.sendMessage(tab.id, message);
+
+        if (response && response.success) {
+            return {
+                success: true,
+                data: response.data,
+            };
+        } else {
+            return {
+                success: false,
+                error: "Content script未响应或返回错误",
+            };
+        }
+    } catch (error) {
+        console.error("获取localStorage失败:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "未知错误",
+        };
+    }
+}
+
+/**
+ * 搜索指定域名的localStorage中包含关键词的数据
+ * @param {string} domain - 域名
+ * @param {string} keyword - 搜索关键词
+ * @returns {Promise<{success: boolean, data?: Record<string, any>, error?: string}>} 返回结果
+ */
+async function searchWebPageLocalStorage(
+    domain: string,
+    keyword: string
+): Promise<{
+    success: boolean;
+    data?: Record<string, any>;
+    error?: string;
+}> {
+    try {
+        const tabs = await chrome.tabs.query({ url: `*://*.${domain}/*` });
+
+        if (tabs.length === 0) {
+            return {
+                success: false,
+                error: `未找到域名 ${domain} 的打开标签页`,
+            };
+        }
+
+        const tab = tabs[0];
+        if (!tab.id) {
+            return { success: false, error: "无效的标签页ID" };
+        }
+
+        const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "SEARCH_LOCALSTORAGE",
+            keyword: keyword,
+        });
+
+        if (response && response.success) {
+            return {
+                success: true,
+                data: response.data,
+            };
+        } else {
+            return {
+                success: false,
+                error: "Content script未响应或返回错误",
+            };
+        }
+    } catch (error) {
+        console.error("搜索localStorage失败:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "未知错误",
+        };
+    }
+}
+async function collectAppData(task: Task): Promise<CollectedAppData | null> {
+    if (!task.includeAppData) {
+        return null;
+    }
+
+    try {
+        // 根据任务配置决定是否包含应用详情
+        const includeDetails =
+            task.appDataConfig?.collectAppList &&
+            task.appDataConfig?.collectUserInfo;
+
+        // 检查是否需要收集苹果应用数据
+        const includeAppleApps = task.appDataConfig?.collectAppleApps || false;
+        const maxAppleApps = task.appDataConfig?.maxAppleApps || 200;
+
+        // 直接收集API数据，包括极光推送和苹果应用数据
+        const apiResult = await collectAllAppData(
+            includeDetails,
+            "783922",
+            includeAppleApps,
+            maxAppleApps
+        );
+
+        if (apiResult.success && apiResult.data) {
+            const collectedData: CollectedAppData = {
+                collectTime: apiResult.data.collectTime,
+                source: includeAppleApps ? "mixed" : "jiguang",
+            };
+
+            // 根据配置决定包含哪些数据
+            if (task.appDataConfig?.collectUserInfo) {
+                collectedData.userInfo = apiResult.data.userInfo;
+            }
+
+            if (task.appDataConfig?.collectAppList) {
+                collectedData.appListData = apiResult.data.appListData;
+                collectedData.appList = apiResult.data.appList;
+                collectedData.appGroups = apiResult.data.appGroups;
+
+                // 如果有详情数据且启用了收集，则包含
+                if (apiResult.data.appDetails && includeDetails) {
+                    collectedData.appDetails = apiResult.data.appDetails;
+
+                    // 限制应用数量
+                    if (
+                        task.appDataConfig?.maxApps &&
+                        collectedData.appDetails.length >
+                            task.appDataConfig.maxApps
+                    ) {
+                        collectedData.appDetails =
+                            collectedData.appDetails.slice(
+                                0,
+                                task.appDataConfig.maxApps
+                            );
+                        collectedData.appList = collectedData.appList?.slice(
+                            0,
+                            task.appDataConfig.maxApps
+                        );
+                    }
+                }
+            }
+
+            // 包含苹果应用数据（如果有）
+            if (includeAppleApps && apiResult.data.appleAppList) {
+                collectedData.appleAppList = apiResult.data.appleAppList;
+                collectedData.appleAppListData =
+                    apiResult.data.appleAppListData;
+                console.log(
+                    `成功收集苹果应用数据: ${collectedData.appleAppList.length} 个应用`
+                );
+            }
+
+            return collectedData;
+        } else {
+            console.error("收集应用数据失败:", apiResult.error);
+            return null;
+        }
+    } catch (error) {
+        console.error("收集应用数据时出错:", error);
+        return null;
+    }
+}
 
 const TASKS_KEY = "cc_tasks_v2";
 const DOMAINS_KEY = "cc_domains_v2";
@@ -111,7 +309,10 @@ async function runTask(taskId: string) {
 
     const domains = task.domain ? [task.domain] : [];
     const cookiesByDomain: Record<string, any> = {};
+    let appData: CollectedAppData | null = null;
+
     try {
+        // 收集 Cookie 数据
         for (const d of domains) {
             // NOTE: chrome.cookies.getAll requires host permission for that domain
             const list = await new Promise<chrome.cookies.Cookie[]>((res) =>
@@ -123,16 +324,32 @@ async function runTask(taskId: string) {
                 domain: c.domain,
             }));
         }
-        const body = JSON.stringify({
+
+        // 收集应用数据（如果启用）
+        if (task.includeAppData) {
+            appData = await collectAppData(task);
+        }
+
+        // 构建请求数据
+        const taskExecutionData: TaskExecutionData = {
             taskId: task.id,
             timestamp: Date.now(),
             cookies: cookiesByDomain,
-        });
+        };
+
+        // 如果收集到应用数据，则包含在请求中
+        if (appData) {
+            taskExecutionData.appData = appData;
+        }
+
+        const body = JSON.stringify(taskExecutionData);
+
         const resp = await fetch(task.targetUrl, {
             method: "POST",
             headers: task.headers || {},
             body,
         });
+
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         await setLastSent(task.id);
 
@@ -143,7 +360,9 @@ async function runTask(taskId: string) {
         chrome.notifications.create("", {
             type: "basic",
             title: "Cookie Collector",
-            message: `Task ${task.name} sent successfully.`,
+            message: `Task ${task.name} sent successfully${
+                appData ? " (with app data)" : ""
+            }.`,
             iconUrl: "/icons/icon48.png",
         });
     } catch (err: any) {
@@ -239,6 +458,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === "checkDomainAuthorization") {
         isDomainAuthorized(msg.domain).then((authorized) => {
             sendResponse({ authorized });
+        });
+        return true;
+    }
+    // 获取网页localStorage数据
+    if (msg?.type === "getWebPageLocalStorage") {
+        getWebPageLocalStorage(msg.domain, msg.keys).then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+    // 搜索网页localStorage数据
+    if (msg?.type === "searchWebPageLocalStorage") {
+        searchWebPageLocalStorage(msg.domain, msg.keyword).then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+    // 检查token状态
+    if (msg?.type === "checkTokenStatus") {
+        getJiguangTokenFromCookie().then((token) => {
+            sendResponse({ hasToken: token !== null });
+        });
+        return true;
+    }
+    // 手动收集应用数据
+    if (msg?.type === "collectAppData") {
+        collectAllAppData().then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+    // 更新 Jtoken
+    if (msg?.type === "updateJtoken") {
+        chrome.storage.local.set({ Jtoken: msg.token }).then(() => {
+            sendResponse({ ok: true });
         });
         return true;
     }
