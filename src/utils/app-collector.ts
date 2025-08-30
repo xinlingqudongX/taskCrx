@@ -742,6 +742,24 @@ export async function collectUserInfo(userId: string = "783922"): Promise<{
 }
 
 /**
+ * 从 localStorage 获取极光推送的令牌
+ * 在浏览器扩展环境中使用 chrome.storage.local
+ * @returns {Promise<string | null>} 返回令牌或null
+ */
+export async function getJiguangTokenFromStorage(): Promise<string | null> {
+    try {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(["Jtoken"], (result) => {
+                resolve(result.Jtoken || null);
+            });
+        });
+    } catch (error) {
+        console.error("获取 Jtoken 失败:", error);
+        return null;
+    }
+}
+
+/**
  * 实时收集苹果开发者应用列表
  * 每次调用时都会重新从 cookie 获取最新的认证信息
  * @param {number} maxApps - 最大应用数量，默认为200
@@ -757,7 +775,7 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
     error?: string;
 }> {
     try {
-        // 获取苹果开发者Cookie和CSRF Token
+        // 获取苹果开发者Cookie
         const cookies = await getAppleCookiesFromBrowser();
 
         if (!cookies) {
@@ -767,7 +785,8 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
             };
         }
 
-        const collector = new AppleAppCollector(cookies, "[asc-ui]");
+        // 使用默认的CSRF Token
+        const collector = new AppleAppCollector(cookies, "csrf-itc");
         return await collector.collectAllAppData(maxApps);
     } catch (error) {
         console.error("收集苹果应用列表失败:", error);
@@ -779,85 +798,129 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
 }
 
 /**
- * 实时收集所有应用数据
-/**
- * 实时收集所有应用数据
- * 每次调用时都会重新从 cookie 获取最新的token，并行获取用户信息和应用列表
- * @param {boolean} includeDetails - 是否包含应用详情信息，默认为false
- * @param {string} userId - 用户ID，可选，默认使用"783922"
- * @param {boolean} includeAppleApps - 是否包含苹果应用数据，默认为false
- * @param {number} maxAppleApps - 苹果应用最大数量，默认为200
- * @returns {Promise<{success: boolean, data?: {userInfo: JiguangUserInfo, appListData: JiguangAppListResponse, appList: JiguangAppInfo[], appGroups: JiguangAppGroup[], appDetails?: JiguangAppDetail[], appleAppList?: AppleAppInfo[], appleAppListData?: AppleAppListResponse, collectTime: number}, error?: string}>} 返回结果
+ * 收集混合应用数据（极光推送 + 苹果开发者）
+ * 根据任务参数决定收集哪些数据源，支持单独或混合收集
+ * @param {object} options - 收集选项
+ * @param {boolean} options.includeJiguangData - 是否包含极光推送数据，默认为false
+ * @param {boolean} options.includeDetails - 是否包含应用详情信息，默认为false
+ * @param {string} options.userId - 用户ID，默认为"783922"
+ * @param {boolean} options.includeAppleApps - 是否包含苹果应用数据，默认为false
+ * @param {number} options.maxAppleApps - 苹果应用最大数量，默认为200
+ * @returns {Promise<{success: boolean, data?: any, error?: string}>} 返回结果
  */
 export async function collectAllAppData(
-    includeDetails: boolean = false,
-    userId: string = "783922",
-    includeAppleApps: boolean = false,
-    maxAppleApps: number = 200
+    options: {
+        includeJiguangData?: boolean;
+        includeDetails?: boolean;
+        userId?: string;
+        includeAppleApps?: boolean;
+        maxAppleApps?: number;
+    } = {}
 ): Promise<{
     success: boolean;
     data?: {
-        userInfo: JiguangUserInfo;
-        appListData: JiguangAppListResponse;
-        appList: JiguangAppInfo[];
-        appGroups: JiguangAppGroup[];
-        appDetails?: JiguangAppDetail[];
+        userInfo?: any;
+        appListData?: any;
+        appList?: any[];
+        appGroups?: any[];
+        appDetails?: any[];
         appleAppList?: AppleAppInfo[];
         appleAppListData?: AppleAppListResponse;
         collectTime: number;
+        source: "jiguang" | "apple" | "mixed";
     };
     error?: string;
 }> {
+    const {
+        includeJiguangData = false,
+        includeDetails = false,
+        userId = "783922",
+        includeAppleApps = false,
+        maxAppleApps = 200,
+    } = options;
+
+    // 验证至少需要收集一种数据
+    if (!includeJiguangData && !includeAppleApps) {
+        return {
+            success: false,
+            error: "必须至少选择收集极光推送数据或苹果应用数据中的一种",
+        };
+    }
+
     try {
-        const token = await getJiguangTokenFromCookie();
-        if (!token) {
-            return {
-                success: false,
-                error: "未找到有效的授权令牌（从 Cookie 获取）",
-            };
+        const tasks: Promise<any>[] = [];
+        const taskTypes: string[] = [];
+
+        // 根据参数决定添加哪些收集任务
+        if (includeJiguangData) {
+            const token = await getJiguangTokenFromCookie();
+            if (!token) {
+                if (!includeAppleApps) {
+                    // 如果只收集极光数据但token不存在，直接返回错误
+                    return {
+                        success: false,
+                        error: "未找到有效的极光推送授权令牌（从 Cookie 获取）",
+                    };
+                }
+                console.warn("极光推送token不存在，跳过极光数据收集");
+            } else {
+                const collector = new AppCollector({
+                    authorization: token,
+                    baseUrl: "https://api.srv.jpush.cn",
+                    userId: userId,
+                });
+                tasks.push(collector.collectAllAppData(includeDetails));
+                taskTypes.push("jiguang");
+            }
         }
 
-        const collector = new AppCollector({
-            authorization: token,
-            baseUrl: "https://api.srv.jpush.cn",
-            userId: userId,
-        });
-
-        // 清单收集任务
-        const tasks: Promise<any>[] = [];
-
-        // 添加极光推送数据收集任务
-        tasks.push(collector.collectAllAppData(includeDetails));
-
-        // 如果需要收集苹果应用数据，添加相应任务
         if (includeAppleApps) {
             tasks.push(collectAppleAppList(maxAppleApps));
+            taskTypes.push("apple");
         }
 
         // 并行执行所有收集任务
         const results = await Promise.allSettled(tasks);
 
-        // 处理极光推送数据结果
-        const jiguangResult = results[0] as PromiseSettledResult<any>;
-        if (
-            jiguangResult.status === "rejected" ||
-            !jiguangResult.value.success
-        ) {
-            const error =
-                jiguangResult.status === "rejected"
-                    ? jiguangResult.reason
-                    : jiguangResult.value.error;
-            throw new Error(`极光推送数据收集失败: ${error}`);
-        }
-
+        // 构建结果对象
         const result: any = {
-            ...jiguangResult.value.data,
             collectTime: Date.now(),
+            source: taskTypes.length === 1 ? taskTypes[0] : "mixed",
         };
 
+        let hasSuccessfulData = false;
+        const errors: string[] = [];
+
+        // 处理极光推送数据结果
+        if (includeJiguangData && taskTypes.includes("jiguang")) {
+            const jiguangIndex = taskTypes.indexOf("jiguang");
+            const jiguangResult = results[
+                jiguangIndex
+            ] as PromiseSettledResult<any>;
+
+            if (
+                jiguangResult.status === "fulfilled" &&
+                jiguangResult.value.success
+            ) {
+                Object.assign(result, jiguangResult.value.data);
+                hasSuccessfulData = true;
+                console.log("成功收集极光推送数据");
+            } else {
+                const error =
+                    jiguangResult.status === "rejected"
+                        ? jiguangResult.reason
+                        : jiguangResult.value.error;
+                errors.push(`极光推送数据收集失败: ${error}`);
+            }
+        }
+
         // 处理苹果应用数据结果
-        if (includeAppleApps && results.length > 1) {
-            const appleResult = results[1] as PromiseSettledResult<any>;
+        if (includeAppleApps && taskTypes.includes("apple")) {
+            const appleIndex = taskTypes.indexOf("apple");
+            const appleResult = results[
+                appleIndex
+            ] as PromiseSettledResult<any>;
+
             if (
                 appleResult.status === "fulfilled" &&
                 appleResult.value.success &&
@@ -866,6 +929,7 @@ export async function collectAllAppData(
                 result.appleAppList = appleResult.value.data.appleAppList;
                 result.appleAppListData =
                     appleResult.value.data.appleAppListData;
+                hasSuccessfulData = true;
                 console.log(
                     "成功收集苹果应用数据",
                     appleResult.value.data.appleAppList.length,
@@ -876,8 +940,21 @@ export async function collectAllAppData(
                     appleResult.status === "rejected"
                         ? appleResult.reason
                         : appleResult.value.error;
-                console.warn("苹果应用数据收集失败:", error);
+                errors.push(`苹果应用数据收集失败: ${error}`);
             }
+        }
+
+        // 判断收集结果
+        if (!hasSuccessfulData) {
+            return {
+                success: false,
+                error: errors.join("; "),
+            };
+        }
+
+        // 如果有部分失败但至少有一个成功，记录警告但返回成功
+        if (errors.length > 0) {
+            console.warn("部分数据收集失败:", errors.join("; "));
         }
 
         return {
@@ -885,7 +962,7 @@ export async function collectAllAppData(
             data: result,
         };
     } catch (error) {
-        console.error("收集所有应用数据失败:", error);
+        console.error("收集应用数据失败:", error);
         return {
             success: false,
             error: error instanceof Error ? error.message : "未知错误",
@@ -894,44 +971,25 @@ export async function collectAllAppData(
 }
 
 /**
- * 创建应用收集器实例
- * 使用指定的token创建收集器，主要用于需要复用收集器的场景
- * @param {string} token - 授权令牌
- * @param {string} userId - 用户ID，默认为"783922"
- * @returns {AppCollector} 返回收集器实例
+ * 向后兼容的collectAllAppData函数
+ * @deprecated 推荐使用新版本的collectAllAppData函数
+ * @param {boolean} includeDetails - 是否包含应用详情信息
+ * @param {string} userId - 用户ID
+ * @param {boolean} includeAppleApps - 是否包含苹果应用数据
+ * @param {number} maxAppleApps - 苹果应用最大数量
+ * @returns {Promise<any>} 返回结果
  */
-export function createAppCollector(
-    token: string,
-    userId: string = "783922"
-): AppCollector {
-    return new AppCollector({
-        authorization: token,
-        baseUrl: "https://api.srv.jpush.cn",
-        userId: userId,
+export async function collectAllAppDataLegacy(
+    includeDetails: boolean = false,
+    userId: string = "783922",
+    includeAppleApps: boolean = false,
+    maxAppleApps: number = 200
+): Promise<any> {
+    return collectAllAppData({
+        includeJiguangData: true, // 旧版本默认包含极光数据
+        includeDetails,
+        userId,
+        includeAppleApps,
+        maxAppleApps,
     });
-}
-
-/**
- * 创建默认的应用收集器实例
- * 自动从 Cookie 中获取 Jtoken 并初始化收集器
- * @deprecated 推荐使用 collectXXX 系列函数，它们会实时获取token
- * @returns {Promise<AppCollector | null>} 返回收集器实例或null
- */
-export async function createDefaultAppCollector(): Promise<AppCollector | null> {
-    try {
-        const token = await getJiguangTokenFromCookie();
-        if (!token) {
-            console.warn("未找到 Jtoken（从 Cookie 获取），无法创建应用收集器");
-            return null;
-        }
-
-        return new AppCollector({
-            authorization: token,
-            baseUrl: "https://api.srv.jpush.cn",
-            userId: "783922",
-        });
-    } catch (error) {
-        console.error("创建应用收集器失败:", error);
-        return null;
-    }
 }
