@@ -46,8 +46,8 @@ class DomainStore {
                     // 支持应用数据相关字段
                     includeAppData: task.includeAppData || false,
                     appDataConfig: task.appDataConfig || {
-                        collectUserInfo: false,
-                        collectAppList: false,
+                        collectJiguangData: false,
+                        collectAppleData: false,
                         maxApps: 50,
                     },
                 }));
@@ -69,11 +69,9 @@ class DomainStore {
                     enabled: true,
                     includeAppData: false,
                     appDataConfig: {
-                        collectUserInfo: false,
-                        collectAppList: false,
+                        collectJiguangData: false,
+                        collectAppleData: false,
                         maxApps: 50,
-                        collectAppleApps: false,
-                        maxAppleApps: 200,
                     },
                 },
                 {
@@ -88,11 +86,9 @@ class DomainStore {
                     enabled: false,
                     includeAppData: false,
                     appDataConfig: {
-                        collectUserInfo: false,
-                        collectAppList: false,
+                        collectJiguangData: false,
+                        collectAppleData: false,
                         maxApps: 50,
-                        collectAppleApps: false,
-                        maxAppleApps: 200,
                     },
                 },
             ];
@@ -179,11 +175,9 @@ class DomainStore {
                     taskData.status === "启用" || taskData.enabled !== false,
                 includeAppData: taskData.includeAppData || false,
                 appDataConfig: taskData.appDataConfig || {
-                    collectUserInfo: false,
-                    collectAppList: false,
+                    collectJiguangData: false,
+                    collectAppleData: false,
                     maxApps: 50,
-                    collectAppleApps: false,
-                    maxAppleApps: 200,
                 },
             };
 
@@ -375,8 +369,8 @@ class DomainStore {
                 // 支持应用数据相关字段
                 includeAppData: task.includeAppData || false,
                 appDataConfig: task.appDataConfig || {
-                    collectUserInfo: false,
-                    collectAppList: false,
+                    collectJiguangData: false,
+                    collectAppleData: false,
                     maxApps: 50,
                 },
             }));

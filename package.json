@@ -1,6 +1,7 @@
 {
-    "name": "cookie-collector-vite",
+    "name": "cookie-collector",
     "version": "1.0.1",
+    "description": "Collect cookies from user-authorized domains and POST as JSON.",
     "private": true,
     "scripts": {
         "dev": "vite",

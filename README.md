@@ -10,7 +10,17 @@
 
 ## 🔄 更新记录
 
-### v2.2.1 (最新)
+### v2.3.0 (最新)
+- **新增**: 苹果开发者Team ID数据收集功能，支持获取developerTeamId和团队信息
+- **新增**: Apple Team ID API集成，可获取团队名称、类型、状态、会员信息等
+- **新增**: 任务配置界面新增"收集苹果团队信息"选项，支持独立收集Team ID数据
+- **扩展**: 混合数据收集支持，可同时收集极光推送、苹果应用和苹果团队信息
+- **类型**: 新增AppleActorInfo、AppleActorListResponse、AppleProviderInfo、ApplePersonInfo等类型定义
+- **API**: 新增collectAppleActorInfo实时收集函数，使用真实API端点/olympus/v1/actors
+- **兼容**: 保留AppleTeamInfo和AppleTeamListResponse别名以保持向后兼容
+- **优化**: 根据真实API响应结构更新类型定义，支持从included中提取developerTeamId
+
+### v2.2.1
 - **优化**: 简化苹果开发者CSRF Token获取，使用固定默认值 "csrf-itc"
 - **移除**: 删除不必要的 `getAppleCSRFToken` 函数，减少API调用开销
 - **改进**: 苹果应用数据收集更加高效和稳定
@@ -102,6 +112,7 @@ taskCrx/
 - **功能**: 从Apple App Store Connect API获取应用相关数据
 - **认证**: 使用苹果开发者网站Cookie进行认证，使用固定CSRF Token "csrf-itc"
 - **数据范围**: 支持获取应用列表、应用基本信息、版本信息等
+- **Team ID支持**: 支持获取Apple开发者团队信息，包括developerTeamId、团队名称、类型、状态等
 - **限制**: 需要用户在浏览器中登录苹果开发者账号
 - **优化**: 无需动态获取CSRF Token，使用默认值提高效率
 
@@ -188,6 +199,6 @@ taskCrx/
 - ✅ **实时Token管理**: 自动从Cookie获取最新token，避免过期问题
 - ✅ **类型安全**: 完整的TypeScript类型定义和JSDoc注释
 - ✅ **模块化设计**: 清晰的代码组织和分层架构
-- ✅ **多数据源**: 支持Cookie、localStorage、极光推送API、苹果开发者API数据收集
+- ✅ **多数据源**: 支持Cookie、localStorage、极光推送API、苹果开发者API、Apple Team ID数据收集
 - ✅ **响应式界面**: 基于Vue 3 + Naive UI的现代化界面
 - ✅ **手动测试**: 采用手动测试验证，确保实际使用场景的可靠性

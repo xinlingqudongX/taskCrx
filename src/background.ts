@@ -45,30 +45,27 @@ async function setDomains(domains: string[]): Promise<void> {
 }
 
 async function collectAppData(task: Task): Promise<CollectedAppData | null> {
-    if (!task.includeAppData) {
+    if (!task.appDataConfig) {
         return null;
     }
 
     try {
-        // 根据任务配置决定收集哪些数据
-        const includeJiguangData =
-            task.appDataConfig?.collectUserInfo ||
-            task.appDataConfig?.collectAppList ||
-            false;
+        const config = task.appDataConfig || {};
 
-        const includeDetails =
-            task.appDataConfig?.collectAppList &&
-            task.appDataConfig?.collectUserInfo;
+        // 根据新的配置决定收集哪些数据
+        const includeJiguangData = config.collectJiguangData || false;
+        const includeAppleData = config.collectAppleData || false;
 
-        const includeAppleApps = task.appDataConfig?.collectAppleApps || false;
-        const maxAppleApps = task.appDataConfig?.maxAppleApps || 200;
+        // 极光数据需要收集用户信息和应用列表详情
+        const includeDetails = includeJiguangData;
+        const maxApps = config.maxApps || 50;
+        const maxAppleApps = config.maxApps || 200;
 
         // 使用新的收集函数，根据参数有选择性地收集数据
         const apiResult = await collectAllAppData({
             includeJiguangData,
             includeDetails,
             userId: "783922",
-            includeAppleApps,
             maxAppleApps,
         });
 
@@ -79,14 +76,11 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
             };
 
             // 根据配置决定包含哪些数据
-            if (
-                task.appDataConfig?.collectUserInfo &&
-                apiResult.data.userInfo
-            ) {
+            if (includeJiguangData && apiResult.data.userInfo) {
                 collectedData.userInfo = apiResult.data.userInfo;
             }
 
-            if (task.appDataConfig?.collectAppList) {
+            if (includeJiguangData) {
                 if (apiResult.data.appListData) {
                     collectedData.appListData = apiResult.data.appListData;
                 }
@@ -103,26 +97,22 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
 
                     // 限制应用数量
                     if (
-                        task.appDataConfig?.maxApps &&
+                        maxApps &&
                         collectedData.appDetails &&
-                        collectedData.appDetails.length >
-                            task.appDataConfig.maxApps
+                        collectedData.appDetails.length > maxApps
                     ) {
                         collectedData.appDetails =
-                            collectedData.appDetails.slice(
-                                0,
-                                task.appDataConfig.maxApps
-                            );
+                            collectedData.appDetails.slice(0, maxApps);
                         collectedData.appList = collectedData.appList?.slice(
                             0,
-                            task.appDataConfig.maxApps
+                            maxApps
                         );
                     }
                 }
             }
 
             // 包含苹果应用数据（如果有）
-            if (includeAppleApps && apiResult.data.appleAppList) {
+            if (includeAppleData && apiResult.data.appleAppList) {
                 collectedData.appleAppList = apiResult.data.appleAppList;
                 collectedData.appleAppListData =
                     apiResult.data.appleAppListData;
@@ -130,6 +120,22 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
                     `成功收集苹果应用数据: ${
                         collectedData.appleAppList?.length || 0
                     } 个应用`
+                );
+            }
+
+            // 包含苹果 Actor/Team 数据（如果有）
+            if (includeAppleData && apiResult.data.appleActorList) {
+                collectedData.appleActorList = apiResult.data.appleActorList;
+                collectedData.appleActorListData =
+                    apiResult.data.appleActorListData;
+                // 为了向后兼容，也设置 appleTeamList 别名
+                collectedData.appleTeamList = apiResult.data.appleActorList;
+                collectedData.appleTeamListData =
+                    apiResult.data.appleActorListData;
+                console.log(
+                    `成功收集苹果 Actor 数据: ${
+                        collectedData.appleActorList?.length || 0
+                    } 个 Actor`
                 );
             }
 
@@ -222,7 +228,7 @@ async function runTask(taskId: string) {
         }
 
         // 收集应用数据（如果启用）
-        if (task.includeAppData) {
+        if (task.appDataConfig) {
             appData = await collectAppData(task);
         }
 

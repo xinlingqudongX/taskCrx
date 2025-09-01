@@ -142,87 +142,44 @@
                 />
             </n-form-item>
             <n-form-item label="状态" path="enabled">
-                <n-switch
-                    v-model:value="taskFormValue.enabled"
-                    checked-value="启用"
-                    unchecked-value="禁用"
-                >
+                <n-switch v-model:value="taskFormValue.enabled">
                     <template #checked>启用</template>
                     <template #unchecked>禁用</template>
                 </n-switch>
             </n-form-item>
             
-            <!-- 应用数据收集配置 -->
-            <n-divider title-placement="left">应用数据收集配置</n-divider>
-            
-            <n-form-item label="启用应用数据收集" path="includeAppData">
-                <n-switch v-model:value="taskFormValue.includeAppData">
+            <n-form-item label="收集极光数据信息" path="collectJiguangData">
+                <n-switch v-model:value="taskFormValue.appDataConfig.collectJiguangData">
                     <template #checked>启用</template>
                     <template #unchecked>禁用</template>
                 </n-switch>
                 <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                    启用后将在任务执行时收集极光推送应用数据
+                    启用后将收集极光推送的用户信息和应用列表数据
                 </n-text>
             </n-form-item>
             
-            <template v-if="taskFormValue.includeAppData">
-                <n-form-item label="收集用户信息" path="collectUserInfo">
-                    <n-switch v-model:value="taskFormValue.appDataConfig.collectUserInfo">
-                        <template #checked>启用</template>
-                        <template #unchecked>禁用</template>
-                    </n-switch>
-                </n-form-item>
-                
-                <n-form-item label="收集应用列表" path="collectAppList">
-                    <n-switch v-model:value="taskFormValue.appDataConfig.collectAppList">
-                        <template #checked>启用</template>
-                        <template #unchecked>禁用</template>
-                    </n-switch>
-                </n-form-item>
-                
-                <n-form-item label="最大应用数量" path="maxApps">
-                    <n-input-number
-                        v-model:value="taskFormValue.appDataConfig.maxApps"
-                        :min="1"
-                        :max="1000"
-                        placeholder="请输入最大应用数量"
-                        style="width: 200px;"
-                    />
-                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                        限制收集的应用数量，防止请求过大
-                    </n-text>
-                </n-form-item>
-                
-                <!-- 苹果应用数据收集配置 -->
-                <n-divider title-placement="left">苹果开发者应用数据</n-divider>
-                
-                <n-form-item label="收集苹果应用" path="collectAppleApps">
-                    <n-switch v-model:value="taskFormValue.appDataConfig.collectAppleApps">
-                        <template #checked>启用</template>
-                        <template #unchecked>禁用</template>
-                    </n-switch>
-                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                        从Apple App Store Connect收集应用数据（需要苹果开发者账号Cookie）
-                    </n-text>
-                </n-form-item>
-                
-                <n-form-item 
-                    v-if="taskFormValue.appDataConfig.collectAppleApps" 
-                    label="苹果应用最大数量" 
-                    path="maxAppleApps"
-                >
-                    <n-input-number
-                        v-model:value="taskFormValue.appDataConfig.maxAppleApps"
-                        :min="1"
-                        :max="1000"
-                        placeholder="请输入苹果应用最大数量"
-                        style="width: 200px;"
-                    />
-                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                        限制收集的苹果应用数量
-                    </n-text>
-                </n-form-item>
-            </template>
+            <n-form-item label="收集苹果数据信息" path="collectAppleData">
+                <n-switch v-model:value="taskFormValue.appDataConfig.collectAppleData">
+                    <template #checked>启用</template>
+                    <template #unchecked>禁用</template>
+                </n-switch>
+                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                    启用后将收集苹果开发者的应用列表和团队信息
+                </n-text>
+            </n-form-item>
+            
+            <n-form-item label="最大应用数量" path="maxApps">
+                <n-input-number
+                    v-model:value="taskFormValue.appDataConfig.maxApps"
+                    :min="1"
+                    :max="1000"
+                    placeholder="请输入最大应用数量"
+                    style="width: 200px;"
+                />
+                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                    限制收集的应用数量，防止请求过大
+                </n-text>
+            </n-form-item>
         </n-form>
         <template #action>
             <n-space>
@@ -280,17 +237,14 @@ const formValue = reactive({
 const taskFormValue = reactive({
     domain: null,
     name: "",
-    cron: "",
-    apiEndpoint: "",
+    cron: "*/30 * * * *",
+    apiEndpoint: "http://127.0.0.1",
     headers: "",
     enabled: true,
-    includeAppData: false,
     appDataConfig: {
-        collectUserInfo: false,
-        collectAppList: false,
+        collectJiguangData: false,
+        collectAppleData: false,
         maxApps: 50,
-        collectAppleApps: false,
-        maxAppleApps: 200,
     },
 });
 
@@ -391,17 +345,14 @@ const openAddTaskModal = () => {
     // 重置表单
     taskFormValue.domain = null;
     taskFormValue.name = "";
-    taskFormValue.cron = "";
-    taskFormValue.apiEndpoint = "";
+    taskFormValue.cron = "*/30 * * * *";
+    taskFormValue.apiEndpoint = "http://127.0.0.1";
     taskFormValue.headers = "";
     taskFormValue.enabled = true;
-    taskFormValue.includeAppData = false;
     taskFormValue.appDataConfig = {
-        collectUserInfo: false,
-        collectAppList: false,
+        collectJiguangData: false,
+        collectAppleData: false,
         maxApps: 50,
-        collectAppleApps: false,
-        maxAppleApps: 200,
     };
     taskModalVisible.value = true;
 };
@@ -417,13 +368,10 @@ const openEditTaskModal = (task) => {
         ? JSON.stringify(task.headers, null, 2)
         : "";
     taskFormValue.enabled = task.enabled;
-    taskFormValue.includeAppData = task.includeAppData || false;
     taskFormValue.appDataConfig = task.appDataConfig || {
-        collectUserInfo: false,
-        collectAppList: false,
+        collectJiguangData: false,
+        collectAppleData: false,
         maxApps: 50,
-        collectAppleApps: false,
-        maxAppleApps: 200,
     };
     taskModalVisible.value = true;
 };
@@ -481,7 +429,7 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
-                    includeAppData: taskFormValue.includeAppData,
+                    includeAppData: taskFormValue.appDataConfig.collectJiguangData || taskFormValue.appDataConfig.collectAppleData,
                     appDataConfig: taskFormValue.appDataConfig,
                 });
             } else {
@@ -494,7 +442,7 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
-                    includeAppData: taskFormValue.includeAppData,
+                    includeAppData: taskFormValue.appDataConfig.collectJiguangData || taskFormValue.appDataConfig.collectAppleData,
                     appDataConfig: taskFormValue.appDataConfig,
                 });
             }

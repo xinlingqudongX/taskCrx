@@ -9,6 +9,10 @@ import type {
     JiguangAppListResponse,
     AppleAppInfo,
     AppleAppListResponse,
+    AppleActorInfo,
+    AppleActorListResponse,
+    AppleProviderInfo,
+    ApplePersonInfo,
 } from "../types/index";
 
 /**
@@ -508,6 +512,105 @@ export class AppleAppCollector {
     }
 
     /**
+     * 获取苹果开发者Actor列表（包含团队信息）
+     * @returns {Promise<{success: boolean, data?: AppleActorListResponse, error?: string}>} 返回结果
+     */
+    async getActorList(): Promise<{
+        success: boolean;
+        data?: AppleActorListResponse;
+        error?: string;
+    }> {
+        try {
+            const url = `${this.baseUrl}/olympus/v1/actors?include=provider%2Cperson&limit=2000`;
+
+            const response = await fetch(url, {
+                method: "GET",
+                headers: this.defaultHeaders,
+                mode: "cors",
+                credentials: "include",
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `HTTP ${response.status}: ${response.statusText}`
+                );
+            }
+
+            const data = await response.json();
+            return {
+                success: true,
+                data: data,
+            };
+        } catch (error) {
+            console.error("获取苹果 Actor 列表失败:", error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : "未知错误",
+            };
+        }
+    }
+
+    /**
+     * 收集苹果开发者Actor信息（包含团队信息）
+     * @returns {Promise<{success: boolean, data?: {actorList: AppleActorInfo[], actorListData: AppleActorListResponse, developerTeamIds: string[], collectTime: number}, error?: string}>} 返回结果
+     */
+    async collectActorInfo(): Promise<{
+        success: boolean;
+        data?: {
+            actorList: AppleActorInfo[];
+            actorListData: AppleActorListResponse;
+            developerTeamIds: string[];
+            collectTime: number;
+        };
+        error?: string;
+    }> {
+        try {
+            const result = await this.getActorList();
+
+            if (!result.success || !result.data) {
+                throw new Error(`获取Actor列表失败: ${result.error}`);
+            }
+
+            const actorListData = result.data;
+            const actorList = actorListData.data || [];
+
+            // 从inCluded中提取developerTeamId
+            const developerTeamIds: string[] = [];
+            if (actorListData.included) {
+                actorListData.included.forEach((item) => {
+                    if (item.type === "providers") {
+                        const providerItem = item as AppleProviderInfo;
+                        if (
+                            providerItem.attributes &&
+                            providerItem.attributes.developerTeamId
+                        ) {
+                            developerTeamIds.push(
+                                providerItem.attributes.developerTeamId
+                            );
+                        }
+                    }
+                });
+            }
+
+            return {
+                success: true,
+                data: {
+                    actorList: actorList,
+                    actorListData: actorListData,
+                    developerTeamIds: developerTeamIds,
+                    collectTime: Date.now(),
+                },
+            };
+        } catch (error) {
+            console.error("收集苹果 Actor 信息失败:", error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : "未知错误",
+            };
+        }
+    }
+
+    /**
      * 收集所有苹果应用数据
      * @param {number} maxApps - 最大应用数量，默认为200
      * @returns {Promise<{success: boolean, data?: {appleAppList: AppleAppInfo[], appleAppListData: AppleAppListResponse, collectTime: number}, error?: string}>} 返回结果
@@ -551,50 +654,6 @@ export class AppleAppCollector {
                 error: error instanceof Error ? error.message : "未知错误",
             };
         }
-    }
-}
-
-/**
- * 每次调用时都会重新从 cookie 获取最新的token
- * @param {number} pageIndex - 页码，默认为1
- * @param {number} pageSize - 每页数量，默认为10
- * @param {string} searchKey - 搜索关键词，默认为空
- * @returns {Promise<{success: boolean, data?: {list: JiguangAppInfo[], total: number}, error?: string}>} 返回结果
- */
-export async function collectAppInfoList(
-    pageIndex: number = 1,
-    pageSize: number = 10,
-    searchKey: string = ""
-): Promise<{
-    success: boolean;
-    data?: {
-        list: JiguangAppInfo[];
-        total: number;
-    };
-    error?: string;
-}> {
-    try {
-        const token = await getJiguangTokenFromCookie();
-        if (!token) {
-            return {
-                success: false,
-                error: "未找到有效的授权令牌（从 Cookie 获取）",
-            };
-        }
-
-        const collector = new AppCollector({
-            authorization: token,
-            baseUrl: "https://api.srv.jpush.cn",
-            userId: "783922",
-        });
-
-        return await collector.getAppInfoList(pageIndex, pageSize, searchKey);
-    } catch (error) {
-        console.error("收集应用信息列表失败:", error);
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : "未知错误",
-        };
     }
 }
 
@@ -760,6 +819,44 @@ export async function getJiguangTokenFromStorage(): Promise<string | null> {
 }
 
 /**
+ * 实时收集苹果开发者Actor信息（包含团队信息）
+ * 每次调用时都会重新从 cookie 获取最新的认证信息
+ * @returns {Promise<{success: boolean, data?: {actorList: AppleActorInfo[], actorListData: AppleActorListResponse, developerTeamIds: string[], collectTime: number}, error?: string}>} 返回结果
+ */
+export async function collectAppleActorInfo(): Promise<{
+    success: boolean;
+    data?: {
+        actorList: AppleActorInfo[];
+        actorListData: AppleActorListResponse;
+        developerTeamIds: string[];
+        collectTime: number;
+    };
+    error?: string;
+}> {
+    try {
+        // 获取苹果开发者Cookie
+        const cookies = await getAppleCookiesFromBrowser();
+
+        if (!cookies) {
+            return {
+                success: false,
+                error: "未找到有效的苹果开发者认证信息（从 Cookie 获取）",
+            };
+        }
+
+        // 使用默认的CSRF Token
+        const collector = new AppleAppCollector(cookies, "csrf-itc");
+        return await collector.collectActorInfo();
+    } catch (error) {
+        console.error("收集苹果 Actor 信息失败:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "未知错误",
+        };
+    }
+}
+
+/**
  * 实时收集苹果开发者应用列表
  * 每次调用时都会重新从 cookie 获取最新的认证信息
  * @param {number} maxApps - 最大应用数量，默认为200
@@ -806,6 +903,7 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
  * @param {string} options.userId - 用户ID，默认为"783922"
  * @param {boolean} options.includeAppleApps - 是否包含苹果应用数据，默认为false
  * @param {number} options.maxAppleApps - 苹果应用最大数量，默认为200
+ * @param {boolean} options.includeAppleTeamInfo - 是否包含苹果团队信息，默认为false
  * @returns {Promise<{success: boolean, data?: any, error?: string}>} 返回结果
  */
 export async function collectAllAppData(
@@ -826,6 +924,8 @@ export async function collectAllAppData(
         appDetails?: any[];
         appleAppList?: AppleAppInfo[];
         appleAppListData?: AppleAppListResponse;
+        appleActorList?: AppleActorInfo[];
+        appleActorListData?: AppleActorListResponse;
         collectTime: number;
         source: "jiguang" | "apple" | "mixed";
     };
@@ -840,7 +940,7 @@ export async function collectAllAppData(
     } = options;
 
     // 验证至少需要收集一种数据
-    if (!includeJiguangData && !includeAppleApps) {
+    if (!includeJiguangData) {
         return {
             success: false,
             error: "必须至少选择收集极光推送数据或苹果应用数据中的一种",
@@ -855,13 +955,6 @@ export async function collectAllAppData(
         if (includeJiguangData) {
             const token = await getJiguangTokenFromCookie();
             if (!token) {
-                if (!includeAppleApps) {
-                    // 如果只收集极光数据但token不存在，直接返回错误
-                    return {
-                        success: false,
-                        error: "未找到有效的极光推送授权令牌（从 Cookie 获取）",
-                    };
-                }
                 console.warn("极光推送token不存在，跳过极光数据收集");
             } else {
                 const collector = new AppCollector({
@@ -876,7 +969,9 @@ export async function collectAllAppData(
 
         if (includeAppleApps) {
             tasks.push(collectAppleAppList(maxAppleApps));
-            taskTypes.push("apple");
+            taskTypes.push("apple-apps");
+            tasks.push(collectAppleActorInfo());
+            taskTypes.push("apple-team");
         }
 
         // 并行执行所有收集任务
@@ -885,7 +980,12 @@ export async function collectAllAppData(
         // 构建结果对象
         const result: any = {
             collectTime: Date.now(),
-            source: taskTypes.length === 1 ? taskTypes[0] : "mixed",
+            source:
+                taskTypes.length === 1
+                    ? taskTypes[0].startsWith("apple")
+                        ? "apple"
+                        : taskTypes[0]
+                    : "mixed",
         };
 
         let hasSuccessfulData = false;
@@ -915,8 +1015,8 @@ export async function collectAllAppData(
         }
 
         // 处理苹果应用数据结果
-        if (includeAppleApps && taskTypes.includes("apple")) {
-            const appleIndex = taskTypes.indexOf("apple");
+        if (includeAppleApps && taskTypes.includes("apple-apps")) {
+            const appleIndex = taskTypes.indexOf("apple-apps");
             const appleResult = results[
                 appleIndex
             ] as PromiseSettledResult<any>;
@@ -944,6 +1044,38 @@ export async function collectAllAppData(
             }
         }
 
+        // 处理苹果团队信息数据结果
+        if (taskTypes.includes("apple-team")) {
+            const teamIndex = taskTypes.indexOf("apple-team");
+            const teamResult = results[teamIndex] as PromiseSettledResult<any>;
+
+            if (
+                teamResult.status === "fulfilled" &&
+                teamResult.value.success &&
+                teamResult.value.data
+            ) {
+                result.appleActorList = teamResult.value.data.actorList;
+                result.appleActorListData = teamResult.value.data.actorListData;
+
+                hasSuccessfulData = true;
+
+                const developerTeamIds =
+                    teamResult.value.data.developerTeamIds || [];
+                console.log(
+                    "成功收集苹果 Actor 信息",
+                    teamResult.value.data.actorList.length,
+                    "个 Actor，获取到 developerTeamId:",
+                    developerTeamIds
+                );
+            } else {
+                const error =
+                    teamResult.status === "rejected"
+                        ? teamResult.reason
+                        : teamResult.value.error;
+                errors.push(`苹果 Actor 信息收集失败: ${error}`);
+            }
+        }
+
         // 判断收集结果
         if (!hasSuccessfulData) {
             return {
@@ -968,28 +1100,4 @@ export async function collectAllAppData(
             error: error instanceof Error ? error.message : "未知错误",
         };
     }
-}
-
-/**
- * 向后兼容的collectAllAppData函数
- * @deprecated 推荐使用新版本的collectAllAppData函数
- * @param {boolean} includeDetails - 是否包含应用详情信息
- * @param {string} userId - 用户ID
- * @param {boolean} includeAppleApps - 是否包含苹果应用数据
- * @param {number} maxAppleApps - 苹果应用最大数量
- * @returns {Promise<any>} 返回结果
- */
-export async function collectAllAppDataLegacy(
-    includeDetails: boolean = false,
-    userId: string = "783922",
-    includeAppleApps: boolean = false,
-    maxAppleApps: number = 200
-): Promise<any> {
-    return collectAllAppData({
-        includeJiguangData: true, // 旧版本默认包含极光数据
-        includeDetails,
-        userId,
-        includeAppleApps,
-        maxAppleApps,
-    });
 }

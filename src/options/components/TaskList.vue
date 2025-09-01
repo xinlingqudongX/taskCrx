@@ -201,9 +201,16 @@ const taskColumns = [
             
             const config = row.appDataConfig || {};
             const features = [];
-            if (config.collectUserInfo) features.push("用户信息");
-            if (config.collectAppList) features.push("应用列表");
-            if (config.maxApps) features.push(`限制${config.maxApps}个`);
+            
+            // 判断是否启用极光数据收集
+            if (config.collectJiguangData) {
+                features.push("极光数据");
+            }
+            
+            // 判断是否启用苹果数据收集
+            if (config.collectAppleData) {
+                features.push("苹果数据");
+            }
             
             const tooltip = features.length > 0 ? features.join(", ") : "基础配置";
             
@@ -225,14 +232,14 @@ const taskColumns = [
                     features.length > 0 && h(
                         "div",
                         {
-                            style: "font-size: 11px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;",
+                            style: "font-size: 11px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;",
                         },
                         tooltip
                     )
                 ]
             );
         },
-        width: 100,
+        width: 120,
     },
     {
         title: "API端点",

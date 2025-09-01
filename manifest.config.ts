@@ -1,4 +1,5 @@
 import { defineManifest } from "@crxjs/vite-plugin";
+import packageJson from "./package.json";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -8,10 +9,10 @@ const cspPolicy = isDev
 
 export default defineManifest({
     manifest_version: 3,
-    name: "Cookie Collector (Vite Template)",
-    version: "1.0.0",
-    description:
-        "Collect cookies from user-authorized domains and POST as JSON (demo template).",
+    name: "Cookie Data Collector",
+    short_name: "Cookie Collector",
+    version: packageJson.version,
+    description: packageJson.description,
     permissions: [
         "cookies",
         "storage",
