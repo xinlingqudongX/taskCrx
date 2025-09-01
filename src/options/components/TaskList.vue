@@ -186,19 +186,8 @@ const taskColumns = [
     },
     {
         title: "应用数据",
-        key: "includeAppData",
+        key: "appDataConfig",
         render: (row) => {
-            if (!row.includeAppData) {
-                return h(
-                    NTag,
-                    {
-                        type: "default",
-                        size: "small",
-                    },
-                    { default: () => "未启用" }
-                );
-            }
-            
             const config = row.appDataConfig || {};
             const features = [];
             
@@ -212,7 +201,19 @@ const taskColumns = [
                 features.push("苹果数据");
             }
             
-            const tooltip = features.length > 0 ? features.join(", ") : "基础配置";
+            // 如果没有启用任何数据收集
+            if (features.length === 0) {
+                return h(
+                    NTag,
+                    {
+                        type: "default",
+                        size: "small",
+                    },
+                    { default: () => "未启用" }
+                );
+            }
+            
+            const tooltip = features.join(", ");
             
             return h(
                 "div",
@@ -229,7 +230,7 @@ const taskColumns = [
                         },
                         { default: () => "已启用" }
                     ),
-                    features.length > 0 && h(
+                    h(
                         "div",
                         {
                             style: "font-size: 11px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;",

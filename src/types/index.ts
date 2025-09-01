@@ -24,7 +24,7 @@ export interface Task {
     /** 最后执行时间 */
     lastRun?: number;
     /** 应用数据配置 */
-    appDataConfig: AppDataConfig;
+    appDataConfig?: AppDataConfig;
 }
 
 /**
@@ -92,7 +92,7 @@ export interface JiguangAppGroup {
 }
 
 /**
- * 极光推送应用信息
+ * 极光推送应用信息（增强版，包含详情）
  * @interface JiguangAppInfo
  */
 export interface JiguangAppInfo {
@@ -118,6 +118,8 @@ export interface JiguangAppInfo {
     defaultWxApp: any | null;
     /** 是否为演示应用 */
     demo: boolean;
+    /** 应用详情信息 */
+    detail?: JiguangAppDetail;
 }
 
 /**
@@ -190,439 +192,76 @@ export interface JiguangUserInfo {
 }
 
 /**
+ * 极光推送数据集合
+ * @interface JiguangData
+ */
+export interface JiguangData {
+    /** 用户信息 */
+    userInfo: JiguangUserInfo;
+    /** 应用列表（包含详情） */
+    appList: JiguangAppInfo[];
+}
+
+/**
+ * 苹果开发者数据集合
+ * @interface AppleData
+ */
+export interface AppleData {
+    /** 应用列表 */
+    appList: AppleAppInfo[];
+    /** Actor列表（团队信息） */
+    actorList: AppleActorInfo[];
+}
+
+/**
  * 收集到的应用数据
  * @interface CollectedAppData
  */
 export interface CollectedAppData {
-    /** 用户信息 */
-    userInfo?: JiguangUserInfo;
-    /** 应用列表响应数据 */
-    appListData?: JiguangAppListResponse;
-    /** 应用列表 (为了向后兼容) */
-    appList?: JiguangAppInfo[];
-    /** 应用分组列表 */
-    appGroups?: JiguangAppGroup[];
-    /** 应用详情列表 */
-    appDetails?: JiguangAppDetail[];
-    /** 苹果开发者应用列表 */
-    appleAppList?: AppleAppInfo[];
-    /** 苹果开发者应用响应数据 */
-    appleAppListData?: AppleAppListResponse;
-    /** 苹果开发者Actor列表 */
-    appleActorList?: AppleActorInfo[];
-    /** 苹果开发者Actor响应数据 */
-    appleActorListData?: AppleActorListResponse;
-    /** 苹果开发者团队列表（向后兼容） */
-    appleTeamList?: AppleTeamInfo[];
-    /** 苹果开发者团队响应数据（向后兼容） */
-    appleTeamListData?: AppleTeamListResponse;
-    /** 网页localStorage数据 */
-    localStorage?: Record<string, any>;
+    /** 极光推送数据 */
+    jiguangData?: JiguangData;
+    /** 苹果开发者数据 */
+    appleData?: AppleData;
     /** 收集时间戳 */
     collectTime: number;
-    /** 数据源标识 */
-    source: "jiguang" | "apple" | "mixed";
 }
 
 /**
- * 苹果开发者应用信息
+ * 苹果开发者应用信息（精简版）
  * @interface AppleAppInfo
  */
 export interface AppleAppInfo {
-    /** 应用类型 */
-    type: string;
     /** 应用ID */
     id: string;
-    /** 应用属性（可选，某些API响应中可能不包含） */
-    attributes?: {
-        /** 应用名称 */
-        name?: string;
-        /** Bundle ID */
-        bundleId?: string;
-        /** SKU */
-        sku?: string;
-        /** 主要语言 */
-        primaryLocale?: string;
-        /** 是否可移除 */
-        isOrEverWasMadeForKids?: boolean;
-        /** 订阅状态信息 */
-        subscriptionStatusUrl?: string;
-        /** 订阅状态URL版本 */
-        subscriptionStatusUrlVersion?: string;
-        /** 订阅状态URL共享密钥 */
-        subscriptionStatusUrlForSandbox?: string;
-        /** 订阅状态URL沙盒版本 */
-        subscriptionStatusUrlVersionForSandbox?: string;
-        /** 可用领土 */
-        availableInNewTerritories?: boolean;
-        /** 内容权限声明 */
-        contentRightsDeclaration?: string;
-    };
-    /** 关联关系 */
-    relationships?: {
-        /** 审核提交 */
-        reviewSubmissions?: {
-            /** 元数据 */
-            meta?: {
-                /** 分页信息 */
-                paging: {
-                    /** 限制 */
-                    limit: number;
-                };
-            };
-            /** 数据 */
-            data?: Array<{
-                /** 类型 */
-                type: string;
-                /** ID */
-                id: string;
-            }>;
-            /** 链接 */
-            links?: {
-                /** 自链接 */
-                self: string;
-                /** 相关链接 */
-                related: string;
-            };
-        };
-        /** 可显示版本（保留向后兼容） */
-        displayableVersions?: {
-            /** 链接 */
-            links?: {
-                /** 自链接 */
-                self: string;
-                /** 相关链接 */
-                related: string;
-            };
-            /** 元数据 */
-            meta?: {
-                /** 分页信息 */
-                paging: {
-                    /** 总数 */
-                    total: number;
-                    /** 限制 */
-                    limit: number;
-                };
-            };
-            /** 数据 */
-            data?: Array<{
-                /** 类型 */
-                type: string;
-                /** ID */
-                id: string;
-            }>;
-        };
-    };
-    /** 链接 */
-    links: {
-        /** 自链接 */
-        self: string;
-    };
+    /** 应用名称 */
+    name: string;
+    /** Bundle ID */
+    bundleId: string;
+    /** SKU */
+    sku?: string;
+    /** 主要语言 */
+    primaryLocale?: string;
 }
 
 /**
- * 苹果开发者Actor信息（实际API响应结构）
+ * 苹果开发者Actor信息（精简版）
  * @interface AppleActorInfo
  */
 export interface AppleActorInfo {
-    /** Actor类型 */
-    type: string;
     /** Actor ID */
     id: string;
-    /** Actor属性 */
-    attributes: {
-        /** 角色列表 */
-        roles: string[];
-        /** 是否当前用户 */
-        isCurrent: boolean;
-        /** 团队类型 */
-        teamType: string;
-        /** 团队ID */
-        teamId: string;
-        /** 是否需要验证法律角色 */
-        needsToVerifyLegalRole: boolean;
-    };
-    /** 关联关系 */
-    relationships: {
-        /** 提供商信息 */
-        provider: {
-            /** 数据 */
-            data: {
-                /** 类型 */
-                type: string;
-                /** ID */
-                id: string;
-            };
-            /** 链接 */
-            links: {
-                /** 包含链接 */
-                include: string;
-            };
-        };
-        /** 用户模块 */
-        userModules: {
-            /** 链接 */
-            links: {
-                /** 包含链接 */
-                include: string;
-            };
-        };
-        /** 个人信息 */
-        person: {
-            /** 数据 */
-            data: {
-                /** 类型 */
-                type: string;
-                /** ID */
-                id: string;
-            };
-            /** 链接 */
-            links: {
-                /** 包含链接 */
-                include: string;
-            };
-        };
-    };
-    /** 链接 */
-    links: {
-        /** 自链接 */
-        self: string;
-    };
-}
-
-/**
- * 苹果开发者Provider信息（包含developerTeamId）
- * @interface AppleProviderInfo
- */
-export interface AppleProviderInfo {
-    /** 类型 */
-    type: string;
-    /** Provider ID */
-    id: string;
-    /** Provider属性 */
-    attributes: {
-        /** 名称 */
-        name: string;
-        /** 短名称 */
-        shortName: string;
-        /** 类型数组 */
-        type: string[];
-        /** 内容类型 */
-        contentType: string[];
-        /** 开发者程序类型 */
-        developerProgram: string;
-        /** 是否内部 */
-        isInternal: boolean;
-        /** 实体类型 */
-        entityType: string;
-        /** 开发者团队ID（核心字段） */
-        developerTeamId: string;
-        /** 内部ID */
-        internalId: number;
-        /** 是否完成注册 */
-        isSignupComplete: boolean;
-        /** 协议列表 */
-        agreements: any[];
-    };
-    /** 链接 */
-    links: {
-        /** 自链接 */
-        self: string;
-    };
-}
-
-/**
- * 苹果开发者Person信息
- * @interface ApplePersonInfo
- */
-export interface ApplePersonInfo {
-    /** 类型 */
-    type: string;
-    /** Person ID */
-    id: string;
-    /** Person属性 */
-    attributes: {
-        /** 名字 */
-        firstName: string;
-        /** 姓氏 */
-        lastName: string;
-        /** 邮箱地址 */
-        emailAddress: string;
-        /** 国家代码 */
-        countryCode: string | null;
-        /** OFAC状态 */
-        ofacState: string;
-    };
-    /** 链接 */
-    links: {
-        /** 自链接 */
-        self: string;
-    };
-}
-
-/**
- * 苹果开发者Actor列表响应数据（实际API结构）
- * @interface AppleActorListResponse
- */
-export interface AppleActorListResponse {
-    /** Actor数据列表 */
-    data: AppleActorInfo[];
-    /** 包含的相关数据（Provider和Person信息） */
-    included: (AppleProviderInfo | ApplePersonInfo)[];
-    /** 链接信息 */
-    links: {
-        /** 自链接 */
-        self: string;
-        /** 首页链接 */
-        first?: string;
-        /** 下一页链接 */
-        next?: string;
-    };
-    /** 元数据 */
-    meta: {
-        /** 分页信息 */
-        paging: {
-            /** 总数 */
-            total: number;
-            /** 限制 */
-            limit: number;
-        };
-    };
-}
-
-/**
- * 为了向后兼容而保留的别名
- * @deprecated 请使用 AppleActorListResponse
- */
-export interface AppleTeamListResponse extends AppleActorListResponse {}
-
-/**
- * 为了向后兼容而保留的别名
- * @deprecated 请使用 AppleActorInfo
- */
-export interface AppleTeamInfo extends AppleActorInfo {}
-
-/**
- * 苹果开发者用户信息
- * @interface AppleUserInfo
- */
-export interface AppleUserInfo {
-    /** 用户类型 */
-    type: string;
-    /** 用户ID */
-    id: string;
-    /** 用户属性 */
-    attributes: {
-        /** 用户名 */
-        username?: string;
-        /** 名字 */
-        firstName?: string;
-        /** 姓氏 */
-        lastName?: string;
-        /** 邮箱 */
-        email?: string;
-        /** 角色 */
-        roles?: string[];
-        /** 用户状态 */
-        userStatus?: string;
-        /** 是否已验证 */
-        isVerified?: boolean;
-        /** 注册日期 */
-        registrationDate?: string;
-    };
-    /** 关联关系 */
-    relationships?: {
-        /** 团队 */
-        teams?: {
-            /** 数据 */
-            data?: Array<{
-                /** 类型 */
-                type: string;
-                /** ID */
-                id: string;
-            }>;
-            /** 链接 */
-            links?: {
-                /** 自链接 */
-                self: string;
-                /** 相关链接 */
-                related: string;
-            };
-        };
-    };
-    /** 链接 */
-    links?: {
-        /** 自链接 */
-        self: string;
-    };
-}
-
-/**
- * 苹果开发者审核提交信息
- * @interface AppleReviewSubmission
- */
-export interface AppleReviewSubmission {
-    /** 类型 */
-    type: string;
-    /** 审核提交ID */
-    id: string;
-    /** 属性 */
-    attributes: {
-        /** 平台 */
-        platform: string;
-        /** 提交日期 */
-        submittedDate: string | null;
-        /** 状态 */
-        state: string;
-    };
-    /** 关联关系 */
-    relationships?: {
-        /** 项目 */
-        items?: {
-            /** 链接 */
-            links: {
-                /** 自链接 */
-                self: string;
-                /** 相关链接 */
-                related: string;
-            };
-        };
-    };
-    /** 链接 */
-    links: {
-        /** 自链接 */
-        self: string;
-    };
-}
-
-/**
- * 苹果开发者应用列表响应数据
- * @interface AppleAppListResponse
- */
-export interface AppleAppListResponse {
-    /** 应用数据列表 */
-    data: AppleAppInfo[];
-    /** 包含的相关数据（如审核提交信息等） */
-    included?: AppleReviewSubmission[];
-    /** 链接信息 */
-    links: {
-        /** 自链接 */
-        self: string;
-        /** 首页链接 */
-        first?: string;
-        /** 下一页链接 */
-        next?: string;
-    };
-    /** 元数据 */
-    meta: {
-        /** 分页信息 */
-        paging: {
-            /** 总数 */
-            total: number;
-            /** 限制 */
-            limit: number;
-        };
-    };
+    /** 角色列表 */
+    roles: string[];
+    /** 是否当前用户 */
+    isCurrent: boolean;
+    /** 团队类型 */
+    teamType: string;
+    /** 团队ID */
+    teamId: string;
+    /** 开发者团队ID */
+    developerTeamId?: string;
+    /** 团队名称 */
+    teamName?: string;
 }
 
 /**
@@ -635,7 +274,9 @@ export interface TaskExecutionData {
     /** 执行时间戳 */
     timestamp: number;
     /** Cookie数据 */
-    cookies: Record<string, any>;
+    cookie: Record<string, any>;
     /** 应用数据 */
-    appData?: CollectedAppData;
+    content?: CollectedAppData;
+    account: string;
+    type: string;
 }

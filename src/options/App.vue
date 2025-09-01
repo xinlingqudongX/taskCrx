@@ -429,7 +429,6 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
-                    includeAppData: taskFormValue.appDataConfig.collectJiguangData || taskFormValue.appDataConfig.collectAppleData,
                     appDataConfig: taskFormValue.appDataConfig,
                 });
             } else {
@@ -442,7 +441,6 @@ const handleSaveTask = async (e) => {
                     headers: headers,
                     enabled: taskFormValue.enabled,
                     status: taskFormValue.enabled ? "启用" : "禁用",
-                    includeAppData: taskFormValue.appDataConfig.collectJiguangData || taskFormValue.appDataConfig.collectAppleData,
                     appDataConfig: taskFormValue.appDataConfig,
                 });
             }

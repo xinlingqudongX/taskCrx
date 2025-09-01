@@ -64,7 +64,7 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
         // 使用新的收集函数，根据参数有选择性地收集数据
         const apiResult = await collectAllAppData({
             includeJiguangData,
-            includeDetails,
+            includeAppleData,
             userId: "783922",
             maxAppleApps,
         });
@@ -72,69 +72,65 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
         if (apiResult.success && apiResult.data) {
             const collectedData: CollectedAppData = {
                 collectTime: apiResult.data.collectTime,
-                source: apiResult.data.source,
             };
 
-            // 根据配置决定包含哪些数据
-            if (includeJiguangData && apiResult.data.userInfo) {
-                collectedData.userInfo = apiResult.data.userInfo;
-            }
-
+            // 构建极光数据集合
             if (includeJiguangData) {
+                const jiguangData: any = {};
+
+                if (apiResult.data.userInfo) {
+                    jiguangData.userInfo = apiResult.data.userInfo;
+                }
                 if (apiResult.data.appListData) {
-                    collectedData.appListData = apiResult.data.appListData;
+                    jiguangData.appListData = apiResult.data.appListData;
                 }
                 if (apiResult.data.appList) {
-                    collectedData.appList = apiResult.data.appList;
+                    jiguangData.appList = apiResult.data.appList;
                 }
                 if (apiResult.data.appGroups) {
-                    collectedData.appGroups = apiResult.data.appGroups;
+                    jiguangData.appGroups = apiResult.data.appGroups;
                 }
-
-                // 如果有详情数据且启用了收集，则包含
                 if (apiResult.data.appDetails && includeDetails) {
-                    collectedData.appDetails = apiResult.data.appDetails;
+                    let appDetails = apiResult.data.appDetails;
+                    let appList = apiResult.data.appList;
 
                     // 限制应用数量
-                    if (
-                        maxApps &&
-                        collectedData.appDetails &&
-                        collectedData.appDetails.length > maxApps
-                    ) {
-                        collectedData.appDetails =
-                            collectedData.appDetails.slice(0, maxApps);
-                        collectedData.appList = collectedData.appList?.slice(
-                            0,
-                            maxApps
-                        );
+                    if (maxApps && appDetails.length > maxApps) {
+                        appDetails = appDetails.slice(0, maxApps);
+                        appList = appList?.slice(0, maxApps);
                     }
+
+                    jiguangData.appDetails = appDetails;
+                    jiguangData.appList = appList;
                 }
+
+                collectedData.jiguangData = jiguangData;
             }
 
-            // 包含苹果应用数据（如果有）
-            if (includeAppleData && apiResult.data.appleAppList) {
-                collectedData.appleAppList = apiResult.data.appleAppList;
-                collectedData.appleAppListData =
-                    apiResult.data.appleAppListData;
+            // 构建苹果数据集合
+            if (includeAppleData) {
+                const appleData: any = {};
+
+                if (apiResult.data.appleAppList) {
+                    appleData.appList = apiResult.data.appleAppList;
+                }
+                if (apiResult.data.appleAppList) {
+                    appleData.appList = apiResult.data.appleAppList;
+                }
+                if (apiResult.data.appleActorList) {
+                    appleData.actorList = apiResult.data.appleActorList;
+                }
+
+                collectedData.appleData = appleData;
+
                 console.log(
                     `成功收集苹果应用数据: ${
-                        collectedData.appleAppList?.length || 0
+                        appleData.appList?.length || 0
                     } 个应用`
                 );
-            }
-
-            // 包含苹果 Actor/Team 数据（如果有）
-            if (includeAppleData && apiResult.data.appleActorList) {
-                collectedData.appleActorList = apiResult.data.appleActorList;
-                collectedData.appleActorListData =
-                    apiResult.data.appleActorListData;
-                // 为了向后兼容，也设置 appleTeamList 别名
-                collectedData.appleTeamList = apiResult.data.appleActorList;
-                collectedData.appleTeamListData =
-                    apiResult.data.appleActorListData;
                 console.log(
                     `成功收集苹果 Actor 数据: ${
-                        collectedData.appleActorList?.length || 0
+                        appleData.actorList?.length || 0
                     } 个 Actor`
                 );
             }
@@ -236,19 +232,24 @@ async function runTask(taskId: string) {
         const taskExecutionData: TaskExecutionData = {
             taskId: task.id,
             timestamp: Date.now(),
-            cookies: cookiesByDomain,
+            cookie: cookiesByDomain,
+            account: "默认账号",
+            type: "任务类型",
         };
 
         // 如果收集到应用数据，则包含在请求中
         if (appData) {
-            taskExecutionData.appData = appData;
+            taskExecutionData.content = appData;
         }
 
         const body = JSON.stringify(taskExecutionData);
 
         const resp = await fetch(task.targetUrl, {
             method: "POST",
-            headers: task.headers || {},
+            headers: Object.assign(
+                { "content-type": "application/json" },
+                task.headers || {}
+            ),
             body,
         });
 
@@ -375,8 +376,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 默认收集所有数据类型（向后兼容）
         collectAllAppData({
             includeJiguangData: true,
-            includeDetails: true,
-            includeAppleApps: true,
+            includeAppleData: true,
         }).then((result) => {
             sendResponse(result);
         });

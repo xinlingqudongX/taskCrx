@@ -173,7 +173,6 @@ class DomainStore {
                 cron: taskData.cron || "",
                 enabled:
                     taskData.status === "启用" || taskData.enabled !== false,
-                includeAppData: taskData.includeAppData || false,
                 appDataConfig: taskData.appDataConfig || {
                     collectJiguangData: false,
                     collectAppleData: false,
@@ -192,7 +191,6 @@ class DomainStore {
                         targetUrl: newTask.apiEndpoint,
                         headers: newTask.headers,
                         enabled: newTask.enabled,
-                        includeAppData: newTask.includeAppData,
                         appDataConfig: newTask.appDataConfig,
                     },
                 });

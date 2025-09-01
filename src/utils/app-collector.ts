@@ -8,11 +8,7 @@ import type {
     JiguangAppDetail,
     JiguangAppListResponse,
     AppleAppInfo,
-    AppleAppListResponse,
     AppleActorInfo,
-    AppleActorListResponse,
-    AppleProviderInfo,
-    ApplePersonInfo,
 } from "../types/index";
 
 /**
@@ -436,53 +432,37 @@ export async function getAppleCookiesFromBrowser(
 }
 
 /**
- * 苹果开发者应用收集器类
- * 用于从苹果 App Store Connect API 收集应用信息
- * @class AppleAppCollector
+ * 苹果开发者数据收集器
+ * 简化版本，只收集核心业务数据
  */
-export class AppleAppCollector {
-    /** 默认请求头 */
-    private defaultHeaders: Record<string, string>;
-    /** 基础URL */
-    private baseUrl: string;
+class AppleDataCollector {
+    private baseUrl = "https://appstoreconnect.apple.com";
+    private defaultHeaders: Record<string, string> = {
+        accept: "application/json, text/plain, */*",
+        "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "content-type": "application/json",
+    };
 
     /**
-     * 构造函数
-     * @param {Record<string, string>} cookies - 苹果开发者Cookie
-     * @param {string} csrfToken - CSRF令牌
+     * 设置Cookie
+     * @param {string} cookieString - Cookie字符串
      */
-    constructor(cookies: Record<string, string>, csrfToken: string) {
-        this.baseUrl = "https://appstoreconnect.apple.com";
-        this.defaultHeaders = {
-            accept: "application/vnd.api+json",
-            "content-type": "application/vnd.api+json",
-            "x-csrf-itc": csrfToken,
-        };
-
-        // 将cookies转换为Cookie字符串
-        const cookieString = Object.entries(cookies)
-            .map(([name, value]) => `${name}=${value}`)
-            .join("; ");
-
+    setCookie(cookieString: string) {
         this.defaultHeaders["cookie"] = cookieString;
     }
 
     /**
-     * 获取苹果开发者应用列表
+     * 获取苹果开发者应用列表（简化版）
      * @param {number} limit - 限制数量，默认为200
-     * @param {number} limitDisplayableVersions - 可显示版本限制，默认为20
-     * @returns {Promise<{success: boolean, data?: AppleAppListResponse, error?: string}>} 返回结果
+     * @returns {Promise<{success: boolean, data?: AppleAppInfo[], error?: string}>} 返回结果
      */
-    async getAppList(
-        limit: number = 200,
-        limitDisplayableVersions: number = 20
-    ): Promise<{
+    async getAppList(limit: number = 200): Promise<{
         success: boolean;
-        data?: AppleAppListResponse;
+        data?: AppleAppInfo[];
         error?: string;
     }> {
         try {
-            const url = `${this.baseUrl}/iris/v1/apps?include=displayableVersions&limit=${limit}&limit[displayableVersions]=${limitDisplayableVersions}`;
+            const url = `${this.baseUrl}/iris/v1/apps?include=displayableVersions,appStoreVersionMetrics,betaReviewMetrics&limit=${limit}&filter[removed]=false&fields[apps]=name,bundleId,primaryLocale,sku,removed,appStoreLegacyStatus,marketplace,displayableVersions,appStoreVersionMetrics,betaReviewMetrics&fields[appStoreVersions]=platform,versionString,appStoreState,storeIcon,watchStoreIcon,isWatchOnly,createdDate,appVersionState&fields[appStoreVersionMetrics]=messageCount&fields[betaReviewMetrics]=messageCount,platform&limit[displayableVersions]=120`;
 
             const response = await fetch(url, {
                 method: "GET",
@@ -497,10 +477,22 @@ export class AppleAppCollector {
                 );
             }
 
-            const data = await response.json();
+            const responseData = await response.json();
+
+            // 只提取核心应用数据，忽略关系数据和翻页信息
+            const appList: AppleAppInfo[] = (responseData.data || []).map(
+                (app: any) => ({
+                    id: app.id,
+                    name: app.attributes?.name || "",
+                    bundleId: app.attributes?.bundleId || "",
+                    sku: app.attributes?.sku,
+                    primaryLocale: app.attributes?.primaryLocale,
+                })
+            );
+
             return {
                 success: true,
-                data: data,
+                data: appList,
             };
         } catch (error) {
             console.error("获取苹果应用列表失败:", error);
@@ -512,16 +504,16 @@ export class AppleAppCollector {
     }
 
     /**
-     * 获取苹果开发者Actor列表（包含团队信息）
-     * @returns {Promise<{success: boolean, data?: AppleActorListResponse, error?: string}>} 返回结果
+     * 获取苹果开发者Actor列表（简化版）
+     * @returns {Promise<{success: boolean, data?: AppleActorInfo[], error?: string}>} 返回结果
      */
     async getActorList(): Promise<{
         success: boolean;
-        data?: AppleActorListResponse;
+        data?: AppleActorInfo[];
         error?: string;
     }> {
         try {
-            const url = `${this.baseUrl}/olympus/v1/actors?include=provider%2Cperson&limit=2000`;
+            const url = `${this.baseUrl}/olympus/v1/actors?include=provider,person&limit=2000`;
 
             const response = await fetch(url, {
                 method: "GET",
@@ -536,119 +528,49 @@ export class AppleAppCollector {
                 );
             }
 
-            const data = await response.json();
+            const responseData = await response.json();
+
+            // 提取核心Actor数据，忽略复杂的关系数据
+            const actorList: AppleActorInfo[] = (responseData.data || []).map(
+                (actor: any) => {
+                    // 从included数据中提取相关信息
+                    let teamName = "";
+                    let developerTeamId = "";
+                    let teamType = "";
+
+                    if (responseData.included) {
+                        const providerInfo = responseData.included.find(
+                            (item: any) =>
+                                item.type === "providers" &&
+                                item.id ===
+                                    actor.relationships?.provider?.data?.id
+                        );
+                        if (providerInfo?.attributes) {
+                            teamName = providerInfo.attributes.name || "";
+                            developerTeamId =
+                                providerInfo.attributes.developerTeamId || "";
+                            teamType = providerInfo.attributes.entityType || "";
+                        }
+                    }
+
+                    return {
+                        id: actor.id,
+                        roles: actor.attributes?.roles || [],
+                        isCurrent: actor.attributes?.isCurrent || false,
+                        teamType: teamType,
+                        teamId: actor.relationships?.provider?.data?.id || "",
+                        developerTeamId: developerTeamId,
+                        teamName: teamName,
+                    };
+                }
+            );
+
             return {
                 success: true,
-                data: data,
+                data: actorList,
             };
         } catch (error) {
             console.error("获取苹果 Actor 列表失败:", error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : "未知错误",
-            };
-        }
-    }
-
-    /**
-     * 收集苹果开发者Actor信息（包含团队信息）
-     * @returns {Promise<{success: boolean, data?: {actorList: AppleActorInfo[], actorListData: AppleActorListResponse, developerTeamIds: string[], collectTime: number}, error?: string}>} 返回结果
-     */
-    async collectActorInfo(): Promise<{
-        success: boolean;
-        data?: {
-            actorList: AppleActorInfo[];
-            actorListData: AppleActorListResponse;
-            developerTeamIds: string[];
-            collectTime: number;
-        };
-        error?: string;
-    }> {
-        try {
-            const result = await this.getActorList();
-
-            if (!result.success || !result.data) {
-                throw new Error(`获取Actor列表失败: ${result.error}`);
-            }
-
-            const actorListData = result.data;
-            const actorList = actorListData.data || [];
-
-            // 从inCluded中提取developerTeamId
-            const developerTeamIds: string[] = [];
-            if (actorListData.included) {
-                actorListData.included.forEach((item) => {
-                    if (item.type === "providers") {
-                        const providerItem = item as AppleProviderInfo;
-                        if (
-                            providerItem.attributes &&
-                            providerItem.attributes.developerTeamId
-                        ) {
-                            developerTeamIds.push(
-                                providerItem.attributes.developerTeamId
-                            );
-                        }
-                    }
-                });
-            }
-
-            return {
-                success: true,
-                data: {
-                    actorList: actorList,
-                    actorListData: actorListData,
-                    developerTeamIds: developerTeamIds,
-                    collectTime: Date.now(),
-                },
-            };
-        } catch (error) {
-            console.error("收集苹果 Actor 信息失败:", error);
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : "未知错误",
-            };
-        }
-    }
-
-    /**
-     * 收集所有苹果应用数据
-     * @param {number} maxApps - 最大应用数量，默认为200
-     * @returns {Promise<{success: boolean, data?: {appleAppList: AppleAppInfo[], appleAppListData: AppleAppListResponse, collectTime: number}, error?: string}>} 返回结果
-     */
-    async collectAllAppData(maxApps: number = 200): Promise<{
-        success: boolean;
-        data?: {
-            appleAppList: AppleAppInfo[];
-            appleAppListData: AppleAppListResponse;
-            collectTime: number;
-        };
-        error?: string;
-    }> {
-        try {
-            const result = await this.getAppList(maxApps);
-
-            if (!result.success || !result.data) {
-                throw new Error(`获取应用列表失败: ${result.error}`);
-            }
-
-            const appListData = result.data;
-            let appList = appListData.data || [];
-
-            // 限制应用数量
-            if (appList.length > maxApps) {
-                appList = appList.slice(0, maxApps);
-            }
-
-            return {
-                success: true,
-                data: {
-                    appleAppList: appList,
-                    appleAppListData: appListData,
-                    collectTime: Date.now(),
-                },
-            };
-        } catch (error) {
-            console.error("收集苹果应用数据失败:", error);
             return {
                 success: false,
                 error: error instanceof Error ? error.message : "未知错误",
@@ -819,16 +741,14 @@ export async function getJiguangTokenFromStorage(): Promise<string | null> {
 }
 
 /**
- * 实时收集苹果开发者Actor信息（包含团队信息）
+ * 实时收集苹果开发者Actor信息（简化版）
  * 每次调用时都会重新从 cookie 获取最新的认证信息
- * @returns {Promise<{success: boolean, data?: {actorList: AppleActorInfo[], actorListData: AppleActorListResponse, developerTeamIds: string[], collectTime: number}, error?: string}>} 返回结果
+ * @returns {Promise<{success: boolean, data?: {actorList: AppleActorInfo[], collectTime: number}, error?: string}>} 返回结果
  */
 export async function collectAppleActorInfo(): Promise<{
     success: boolean;
     data?: {
         actorList: AppleActorInfo[];
-        actorListData: AppleActorListResponse;
-        developerTeamIds: string[];
         collectTime: number;
     };
     error?: string;
@@ -844,9 +764,27 @@ export async function collectAppleActorInfo(): Promise<{
             };
         }
 
-        // 使用默认的CSRF Token
-        const collector = new AppleAppCollector(cookies, "csrf-itc");
-        return await collector.collectActorInfo();
+        // 将cookie对象转换为字符串
+        const cookieString = Object.entries(cookies)
+            .map(([name, value]) => `${name}=${value}`)
+            .join("; ");
+
+        const collector = new AppleDataCollector();
+        collector.setCookie(cookieString);
+
+        const result = await collector.getActorList();
+
+        if (!result.success || !result.data) {
+            throw new Error(`获取Actor列表失败: ${result.error}`);
+        }
+
+        return {
+            success: true,
+            data: {
+                actorList: result.data,
+                collectTime: Date.now(),
+            },
+        };
     } catch (error) {
         console.error("收集苹果 Actor 信息失败:", error);
         return {
@@ -857,16 +795,15 @@ export async function collectAppleActorInfo(): Promise<{
 }
 
 /**
- * 实时收集苹果开发者应用列表
+ * 实时收集苹果开发者应用列表（简化版）
  * 每次调用时都会重新从 cookie 获取最新的认证信息
  * @param {number} maxApps - 最大应用数量，默认为200
- * @returns {Promise<{success: boolean, data?: {appleAppList: AppleAppInfo[], appleAppListData: AppleAppListResponse, collectTime: number}, error?: string}>} 返回结果
+ * @returns {Promise<{success: boolean, data?: {appleAppList: AppleAppInfo[], collectTime: number}, error?: string}>} 返回结果
  */
 export async function collectAppleAppList(maxApps: number = 200): Promise<{
     success: boolean;
     data?: {
         appleAppList: AppleAppInfo[];
-        appleAppListData: AppleAppListResponse;
         collectTime: number;
     };
     error?: string;
@@ -882,9 +819,27 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
             };
         }
 
-        // 使用默认的CSRF Token
-        const collector = new AppleAppCollector(cookies, "csrf-itc");
-        return await collector.collectAllAppData(maxApps);
+        // 将cookie对象转换为字符串
+        const cookieString = Object.entries(cookies)
+            .map(([name, value]) => `${name}=${value}`)
+            .join("; ");
+
+        const collector = new AppleDataCollector();
+        collector.setCookie(cookieString);
+
+        const result = await collector.getAppList(maxApps);
+
+        if (!result.success || !result.data) {
+            throw new Error(`获取应用列表失败: ${result.error}`);
+        }
+
+        return {
+            success: true,
+            data: {
+                appleAppList: result.data,
+                collectTime: Date.now(),
+            },
+        };
     } catch (error) {
         console.error("收集苹果应用列表失败:", error);
         return {
@@ -899,19 +854,16 @@ export async function collectAppleAppList(maxApps: number = 200): Promise<{
  * 根据任务参数决定收集哪些数据源，支持单独或混合收集
  * @param {object} options - 收集选项
  * @param {boolean} options.includeJiguangData - 是否包含极光推送数据，默认为false
- * @param {boolean} options.includeDetails - 是否包含应用详情信息，默认为false
  * @param {string} options.userId - 用户ID，默认为"783922"
- * @param {boolean} options.includeAppleApps - 是否包含苹果应用数据，默认为false
+ * @param {boolean} options.includeAppleData - 是否包含苹果应用数据，默认为false
  * @param {number} options.maxAppleApps - 苹果应用最大数量，默认为200
- * @param {boolean} options.includeAppleTeamInfo - 是否包含苹果团队信息，默认为false
  * @returns {Promise<{success: boolean, data?: any, error?: string}>} 返回结果
  */
 export async function collectAllAppData(
     options: {
         includeJiguangData?: boolean;
-        includeDetails?: boolean;
         userId?: string;
-        includeAppleApps?: boolean;
+        includeAppleData?: boolean;
         maxAppleApps?: number;
     } = {}
 ): Promise<{
@@ -923,24 +875,20 @@ export async function collectAllAppData(
         appGroups?: any[];
         appDetails?: any[];
         appleAppList?: AppleAppInfo[];
-        appleAppListData?: AppleAppListResponse;
         appleActorList?: AppleActorInfo[];
-        appleActorListData?: AppleActorListResponse;
         collectTime: number;
-        source: "jiguang" | "apple" | "mixed";
     };
     error?: string;
 }> {
     const {
         includeJiguangData = false,
-        includeDetails = false,
         userId = "783922",
-        includeAppleApps = false,
+        includeAppleData = false,
         maxAppleApps = 200,
     } = options;
 
     // 验证至少需要收集一种数据
-    if (!includeJiguangData) {
+    if (!includeJiguangData || !includeAppleData) {
         return {
             success: false,
             error: "必须至少选择收集极光推送数据或苹果应用数据中的一种",
@@ -962,12 +910,12 @@ export async function collectAllAppData(
                     baseUrl: "https://api.srv.jpush.cn",
                     userId: userId,
                 });
-                tasks.push(collector.collectAllAppData(includeDetails));
+                tasks.push(collector.collectAllAppData(includeJiguangData));
                 taskTypes.push("jiguang");
             }
         }
 
-        if (includeAppleApps) {
+        if (includeAppleData) {
             tasks.push(collectAppleAppList(maxAppleApps));
             taskTypes.push("apple-apps");
             tasks.push(collectAppleActorInfo());
@@ -980,12 +928,6 @@ export async function collectAllAppData(
         // 构建结果对象
         const result: any = {
             collectTime: Date.now(),
-            source:
-                taskTypes.length === 1
-                    ? taskTypes[0].startsWith("apple")
-                        ? "apple"
-                        : taskTypes[0]
-                    : "mixed",
         };
 
         let hasSuccessfulData = false;
@@ -1015,7 +957,7 @@ export async function collectAllAppData(
         }
 
         // 处理苹果应用数据结果
-        if (includeAppleApps && taskTypes.includes("apple-apps")) {
+        if (includeAppleData && taskTypes.includes("apple-apps")) {
             const appleIndex = taskTypes.indexOf("apple-apps");
             const appleResult = results[
                 appleIndex
@@ -1027,8 +969,6 @@ export async function collectAllAppData(
                 appleResult.value.data
             ) {
                 result.appleAppList = appleResult.value.data.appleAppList;
-                result.appleAppListData =
-                    appleResult.value.data.appleAppListData;
                 hasSuccessfulData = true;
                 console.log(
                     "成功收集苹果应用数据",
@@ -1055,17 +995,13 @@ export async function collectAllAppData(
                 teamResult.value.data
             ) {
                 result.appleActorList = teamResult.value.data.actorList;
-                result.appleActorListData = teamResult.value.data.actorListData;
 
                 hasSuccessfulData = true;
 
-                const developerTeamIds =
-                    teamResult.value.data.developerTeamIds || [];
                 console.log(
                     "成功收集苹果 Actor 信息",
                     teamResult.value.data.actorList.length,
-                    "个 Actor，获取到 developerTeamId:",
-                    developerTeamIds
+                    "个 Actor"
                 );
             } else {
                 const error =
