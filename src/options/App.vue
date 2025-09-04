@@ -128,9 +128,11 @@
                 />
             </n-form-item>
             <n-form-item label="API端点" path="apiEndpoint">
-                <n-input
+                <n-auto-complete
                     v-model:value="taskFormValue.apiEndpoint"
-                    placeholder="请输入API端点URL"
+                    :options="apiEndpointOptions"
+                    placeholder="请输入或选择API端点URL"
+                    clearable
                 />
             </n-form-item>
             <n-form-item label="请求头 (JSON格式)" path="headers">
@@ -199,6 +201,7 @@ import {
     NModal,
     NSpace,
     NInput,
+    NAutoComplete,
     NInputNumber,
     NForm,
     NFormItem,
@@ -332,6 +335,14 @@ const domainOptions = computed(() => {
     }));
 });
 
+// 计算属性：API端点历史选项
+const apiEndpointOptions = computed(() => {
+    return (domainStore.getApiEndpoints?.() || []).map((ep) => ({
+        label: ep,
+        value: ep,
+    }));
+});
+
 const openInfoModal = () => {
     infoModalVisible.value = true;
 };
@@ -408,7 +419,7 @@ const handleSaveTask = async (e) => {
     //     console.log(`用户拒绝了对域名 ${domain} 的权限请求`);
     //     return false;
     // }
-    taskFormRef.value?.validate((errors) => {
+    taskFormRef.value?.validate(async (errors) => {
         if (!errors) {
             // 解析请求头
             let headers = {};
@@ -422,7 +433,7 @@ const handleSaveTask = async (e) => {
 
             if (editingTask.value) {
                 // 更新任务
-                domainStore.updateTask(editingTask.value.domain, {
+                await domainStore.updateTask(editingTask.value.domain, {
                     name: taskFormValue.name,
                     cron: taskFormValue.cron,
                     apiEndpoint: taskFormValue.apiEndpoint,
@@ -433,7 +444,7 @@ const handleSaveTask = async (e) => {
                 });
             } else {
                 // 添加新任务
-                domainStore.addTask({
+                const result = await domainStore.addTask({
                     domain: taskFormValue.domain,
                     name: taskFormValue.name,
                     cron: taskFormValue.cron,
@@ -443,6 +454,20 @@ const handleSaveTask = async (e) => {
                     status: taskFormValue.enabled ? "启用" : "禁用",
                     appDataConfig: taskFormValue.appDataConfig,
                 });
+                
+                // 检查任务是否已存在
+                if (result && result.error === "TASK_EXISTS") {
+                    // 显示错误提示弹窗
+                    alert(result.message || "该任务已存在，请检查API端点是否重复");
+                    return;
+                }
+                
+                // 检查是否添加成功
+                if (!result) {
+                    // 显示其他错误提示弹窗
+                    alert("添加任务失败，请重试");
+                    return;
+                }
             }
 
             taskModalVisible.value = false;
@@ -507,4 +532,28 @@ const handleFileImport = (event) => {
 defineExpose({
     openEditTaskModal,
 });
+
+// 创建事件总线
+const eventBus = {
+    listeners: {},
+    emit(event, data) {
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(callback => callback(data));
+        }
+    },
+    on(event, callback) {
+        if (!this.listeners[event]) {
+            this.listeners[event] = [];
+        }
+        this.listeners[event].push(callback);
+    }
+};
+
+// 监听编辑任务事件
+eventBus.on('editTask', (task) => {
+    openEditTaskModal(task);
+});
+
+// 暴露事件总线给全局
+window.eventBus = eventBus;
 </script>

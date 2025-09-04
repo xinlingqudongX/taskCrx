@@ -17,6 +17,8 @@ import { domainStore } from "../store";
 const domainAuthStatus = ref({});
 
 // 检查所有任务域名的授权状态
+
+// 检查所有任务域名的授权状态
 const checkAllDomainAuthorizations = async () => {
     const tasks = domainStore.getTasks();
     for (const task of tasks) {
@@ -72,10 +74,12 @@ const toggleTaskStatus = async (domain) => {
 };
 
 const editTask = (task) => {
-    // 获取父组件实例并调用编辑方法
-    const app = document.querySelector("#app").__vue_app__;
-    const appInstance = app._instance;
-    appInstance.exposed.openEditTaskModal(task);
+    // 使用事件总线调用父组件的编辑方法
+    if (window.eventBus) {
+        window.eventBus.emit('editTask', task);
+    } else {
+        console.error("事件总线未初始化，无法编辑任务");
+    }
 };
 
 const formatDate = (date) => {

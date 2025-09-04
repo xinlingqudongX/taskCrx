@@ -269,6 +269,7 @@ async function runTask(taskId: string) {
             iconUrl: "/icons/icon48.png",
         });
     } catch (err: any) {
+        console.error("Failed to send task:", err);
         chrome.notifications.create("", {
             type: "basic",
             title: "Cookie Collector - Failed",

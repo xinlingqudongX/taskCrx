@@ -15,6 +15,7 @@ class DomainStore {
         this.state = reactive({
             domains: [] as string[],
             tasks: [] as Task[],
+            apiEndpoints: [] as string[],
         });
 
         // 初始化时从background获取数据
@@ -51,6 +52,12 @@ class DomainStore {
                         maxApps: 50,
                     },
                 }));
+                // 汇总唯一API端点
+                const endpoints = new Set<string>();
+                for (const t of this.state.tasks) {
+                    if (t.apiEndpoint) endpoints.add(t.apiEndpoint);
+                }
+                this.state.apiEndpoints = Array.from(endpoints);
             }
         } catch (error) {
             console.error("初始化数据失败", error);
@@ -153,12 +160,16 @@ class DomainStore {
         return this.state.tasks;
     }
 
+    getApiEndpoints() {
+        return this.state.apiEndpoints || [];
+    }
+
     async addTask(taskData: Partial<Task>) {
         const domain = taskData.domain;
         if (!domain) return null;
 
         const taskExists = this.state.tasks.some(
-            (task: Task) => task.domain === domain
+            (task: Task) => task.apiEndpoint === taskData.apiEndpoint
         );
         if (!taskExists) {
             const newTask: Task = {
@@ -195,6 +206,12 @@ class DomainStore {
                     },
                 });
                 this.state.tasks.push(newTask);
+                if (
+                    newTask.apiEndpoint &&
+                    !this.state.apiEndpoints.includes(newTask.apiEndpoint)
+                ) {
+                    this.state.apiEndpoints.push(newTask.apiEndpoint);
+                }
                 console.log(`成功添加任务: ${domain}`);
                 return newTask;
             } catch (error) {
@@ -202,8 +219,8 @@ class DomainStore {
                 return null;
             }
         }
-        console.log(`任务已存在: ${domain}`);
-        return null;
+        console.log(`任务已存在: ${taskData.apiEndpoint}`);
+        return { error: "TASK_EXISTS", message: `任务已存在: ${taskData.apiEndpoint}` };
     }
 
     async removeTask(domain: string) {
@@ -372,6 +389,13 @@ class DomainStore {
                     maxApps: 50,
                 },
             }));
+
+            // 汇总唯一API端点
+            const endpoints = new Set<string>();
+            for (const t of this.state.tasks) {
+                if (t.apiEndpoint) endpoints.add(t.apiEndpoint);
+            }
+            this.state.apiEndpoints = Array.from(endpoints);
 
             console.log(`成功导入 ${data.tasks.length} 个任务`);
             return { success: true, count: data.tasks.length };
