@@ -1,78 +1,113 @@
 #!/bin/bash
 
+# 自动生成 SSL 证书脚本
+# 使用 mkcert 生成开发环境证书，支持 Chrome 浏览器验证
 
-# openssl req -x509 -newkey rsa:4096 -days 365 -nodes -keyout private-key.pem -out public-cert.pem -subj "/C=CN/ST=Beijing/L=Beijing/O=Development/OU=IT/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:0.0.0.0,IP:192.168.3.23,IP:192.168.3.43,IP:192.168.3.38,IP:114.132.85.89,IP:13.250.52.131,IP:192.168.3.68"
+echo "开始使用 mkcert 生成 SSL 证书..."
 
-
-# 检查是否提供了 IP 地址参数
+# 检查是否提供了地址参数
 if [ -z "$1" ]; then
-  echo "请提供以逗号分隔的 IP 地址列表。"
+  echo "使用方法: $0 <地址列表，逗号分隔>"
+  echo "例如: $0 192.168.3.10,54.255.8.37"
+  echo "       $0 192.168.3.10,192.168.1.100,your-tunnel-domain.com"
   exit 1
 fi
 
-# 将 IP 地址列表转换为 OpenSSL 的 subjectAltName 格式
-IFS=',' read -r -a ips <<< "$1"
-alt_names="DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:0.0.0.0"
-for ip in "${ips[@]}"; do
-  alt_names+=",IP:${ip}"
+# 将地址列表转换为 mkcert 参数格式
+IFS=',' read -r -a addresses <<< "$1"
+mkcert_args="localhost 127.0.0.1 ::1"
+
+for addr in "${addresses[@]}"; do
+  # 去除空格
+  addr=$(echo "$addr" | xargs)
+  mkcert_args+=" $addr"
 done
 
-# 为不同操作系统设置正确的 subj 格式
-subj="/C=CN/ST=Beijing/L=Beijing/O=Development/OU=IT/CN=localhost"
+echo "证书将包含以下地址: $mkcert_args"
 
-# 在 Windows Git Bash 环境中使用不同的 OpenSSL 命令格式
+# 根据操作系统类型调用对应的 mkcert 工具
+echo "生成证书和私钥文件..."
+
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MKCERT_DIR="${SCRIPT_DIR}/mkcert"
+
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-  # 使用 req 文件方式来避免路径解析问题
-  cat > req.conf <<EOF
-[req]
-default_bits = 2048
-default_md = sha256
-distinguished_name = req_distinguished_name
-req_extensions = v3_req
-prompt = no
-
-[req_distinguished_name]
-C = CN
-ST = Beijing
-L = Beijing
-O = Development
-OU = IT
-CN = localhost
-
-[v3_req]
-subjectAltName = ${alt_names}
-EOF
-
-  # 生成自签名证书和私钥，使用配置文件方式
-  openssl req -x509 -newkey rsa:2048 -keyout mycert.key -out mycert.crt -days 365 -nodes -config req.conf
-  
-  # 清理临时文件
-  rm req.conf
+  # Windows Git Bash 环境
+  MKCERT_BIN="${MKCERT_DIR}/mkcert-v1.4.4-windows-amd64.exe"
+  echo "检测到 Windows 环境，使用 ${MKCERT_BIN}"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  # macOS 环境
+  MKCERT_BIN="${MKCERT_DIR}/mkcert-v1.4.4-darwin-amd64"
+  echo "检测到 macOS 环境，使用 ${MKCERT_BIN}"
+  chmod +x "$MKCERT_BIN" 2>/dev/null || true
 else
-  # 其他系统保持原有方式
-  openssl req -x509 -newkey rsa:2048 -keyout mycert.key -out mycert.crt -days 365 -nodes \
-    -subj "$subj" \
-    -addext "subjectAltName = ${alt_names}" \
-    -batch
+  # Linux 环境
+  MKCERT_BIN="${MKCERT_DIR}/mkcert-v1.4.4-linux-amd64"
+  echo "检测到 Linux 环境，使用 ${MKCERT_BIN}"
+  chmod +x "$MKCERT_BIN" 2>/dev/null || true
 fi
 
-# 根据操作系统添加证书到信任存储
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  # macOS
-  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain mycert.crt
-  echo "证书已添加到 macOS 系统信任存储。"
-elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-  # Windows (Git Bash)
-  # 检查是否具有管理员权限
-  net session > /dev/null 2>&1
-  if [ $? -eq 0 ]; then
-    certutil -addstore "Root" mycert.crt
-    echo "证书已添加到 Windows 信任根证书存储。"
-  else
-    echo "错误: 在 Windows 上安装证书需要管理员权限。请以管理员身份运行此脚本。"
-    exit 1
-  fi
-else
-  echo "不支持的操作系统：$OSTYPE"
+# 检查 mkcert 工具是否存在
+if [[ ! -f "$MKCERT_BIN" ]]; then
+  echo "错误: 找不到 mkcert 工具: $MKCERT_BIN"
+  echo "请确保 mkcert 目录包含对应平台的工具文件"
   exit 1
 fi
+
+# 执行 mkcert 安装 CA
+echo "正在安装 CA..."
+"$MKCERT_BIN" -install
+
+# 执行 mkcert 生成证书
+"$MKCERT_BIN" -key-file mycert.key -cert-file mycert.crt $mkcert_args
+
+# 检查证书是否生成成功
+if [[ ! -f "mycert.crt" || ! -f "mycert.key" ]]; then
+  echo "错误: 证书生成失败"
+  echo "使用的 mkcert 工具: $MKCERT_BIN"
+  echo "请检查工具文件是否损坏或系统是否兼容"
+  exit 1
+fi
+
+echo "证书生成成功!"
+
+# 生成 Fastify 专用的证书文件
+echo "生成 Fastify 专用证书文件..."
+cp mycert.crt public-cert.pem
+cp mycert.key private-key.pem
+
+echo "文件生成完成:"
+echo "  - mycert.crt (证书文件)"
+echo "  - mycert.key (私钥文件)"
+echo "  - public-cert.pem (Fastify 证书文件)"
+echo "  - private-key.pem (Fastify 私钥文件)"
+
+# 显示证书信息
+echo ""
+echo "证书信息:"
+echo "  - 证书文件: mycert.crt"
+echo "  - 私钥文件: mycert.key"
+echo "  - 包含的域名/IP: $mkcert_args"
+
+echo ""
+echo "🎉 mkcert 证书生成完成！"
+echo ""
+echo "📢 重要信息："
+echo "  - mkcert 已自动将 CA 根证书安装到系统信任存储"
+echo "  - 浏览器可能需要重启以识别新安装的证书"
+
+echo ""
+echo "📢 下一步操作："
+echo "  1. 重启 Chrome 浏览器"
+echo "  2. 访问 https://localhost 或您配置的其他地址"
+echo "  3. 证书应该显示为有效和受信任的"
+echo ""
+echo "📝 故障排除："
+echo "  如果证书仍不受信任，请尝试："
+echo "  - 运行: \"$MKCERT_BIN\" -install"
+echo "  - 重启浏览器"
+echo "  - 清除浏览器缓存"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
