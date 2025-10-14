@@ -168,73 +168,69 @@ class DomainStore {
         const domain = taskData.domain;
         if (!domain) return null;
 
-        const taskExists = this.state.tasks.some(
-            (task: Task) => task.apiEndpoint === taskData.apiEndpoint
-        );
-        if (!taskExists) {
-            const newTask: Task = {
-                id: Date.now().toString(),
-                domain,
-                name: taskData.name || domain,
-                status: taskData.status || "启用",
-                lastRun: taskData.lastRun || null,
-                nextRun: taskData.nextRun || null,
-                apiEndpoint: taskData.apiEndpoint || "",
-                headers: taskData.headers || {},
-                cron: taskData.cron || "",
-                enabled:
-                    taskData.status === "启用" || taskData.enabled !== false,
-                appDataConfig: taskData.appDataConfig || {
-                    collectJiguangData: false,
-                    collectAppleData: false,
-                    maxApps: 50,
-                },
-            };
+        // 生成唯一ID
+        const newTaskId =
+            Date.now().toString() + Math.random().toString(36).substring(2, 9);
 
-            try {
-                await chrome.runtime.sendMessage({
-                    type: "saveTask",
-                    task: {
-                        id: newTask.id,
-                        domain: newTask.domain,
-                        name: newTask.name,
-                        cron: newTask.cron,
-                        targetUrl: newTask.apiEndpoint,
-                        headers: newTask.headers,
-                        enabled: newTask.enabled,
-                        appDataConfig: newTask.appDataConfig,
-                    },
-                });
-                this.state.tasks.push(newTask);
-                if (
-                    newTask.apiEndpoint &&
-                    !this.state.apiEndpoints.includes(newTask.apiEndpoint)
-                ) {
-                    this.state.apiEndpoints.push(newTask.apiEndpoint);
-                }
-                console.log(`成功添加任务: ${domain}`);
-                return newTask;
-            } catch (error) {
-                console.error("添加任务失败", error);
-                return null;
+        const newTask: Task = {
+            id: newTaskId,
+            domain,
+            name: taskData.name || domain,
+            status: taskData.status || "启用",
+            lastRun: taskData.lastRun || null,
+            nextRun: taskData.nextRun || null,
+            apiEndpoint: taskData.apiEndpoint || "",
+            headers: taskData.headers || {},
+            cron: taskData.cron || "",
+            enabled: taskData.status === "启用" || taskData.enabled !== false,
+            appDataConfig: taskData.appDataConfig || {
+                collectJiguangData: false,
+                collectAppleData: false,
+                maxApps: 50,
+            },
+        };
+
+        try {
+            await chrome.runtime.sendMessage({
+                type: "saveTask",
+                task: {
+                    id: newTask.id,
+                    domain: newTask.domain,
+                    name: newTask.name,
+                    cron: newTask.cron,
+                    targetUrl: newTask.apiEndpoint,
+                    headers: newTask.headers,
+                    enabled: newTask.enabled,
+                    appDataConfig: newTask.appDataConfig,
+                },
+            });
+            this.state.tasks.push(newTask);
+            if (
+                newTask.apiEndpoint &&
+                !this.state.apiEndpoints.includes(newTask.apiEndpoint)
+            ) {
+                this.state.apiEndpoints.push(newTask.apiEndpoint);
             }
+            console.log(`成功添加任务: ${domain} (ID: ${newTaskId})`);
+            return newTask;
+        } catch (error) {
+            console.error("添加任务失败", error);
+            return null;
         }
-        console.log(`任务已存在: ${taskData.apiEndpoint}`);
-        return { error: "TASK_EXISTS", message: `任务已存在: ${taskData.apiEndpoint}` };
     }
 
-    async removeTask(domain: string) {
-        const task = this.state.tasks.find((t: Task) => t.domain === domain);
+    async removeTask(taskId: string) {
+        const task = this.state.tasks.find((t: Task) => t.id === taskId);
         if (task) {
             try {
                 await chrome.runtime.sendMessage({
                     type: "deleteTask",
-                    taskId: task.id,
+                    taskId: taskId,
                 });
                 this.state.tasks = this.state.tasks.filter(
-                    (t: Task) => t.domain !== domain
+                    (t: Task) => t.id !== taskId
                 );
-                console.log(`已删除任务: ${domain}`);
+                console.log(`已删除任务: ${task.domain} (ID: ${taskId})`);
                 return true;
             } catch (error) {
                 console.error("删除任务失败", error);
@@ -244,8 +240,8 @@ class DomainStore {
         return false;
     }
 
-    async updateTask(domain: string, updates: Partial<Task>) {
-        const task = this.state.tasks.find((t: Task) => t.domain === domain);
+    async updateTask(taskId: string, updates: Partial<Task>) {
+        const task = this.state.tasks.find((t: Task) => t.id === taskId);
         if (task) {
             // 更新本地状态
             Object.assign(task, updates);
@@ -271,7 +267,7 @@ class DomainStore {
                         appDataConfig: task.appDataConfig,
                     },
                 });
-                console.log(`更新任务配置: ${domain}`);
+                console.log(`更新任务配置: ${task.domain} (ID: ${taskId})`);
                 return true;
             } catch (error) {
                 console.error("更新任务配置失败", error);
@@ -281,31 +277,48 @@ class DomainStore {
         return false;
     }
 
-    async toggleTaskStatus(domain: string) {
-        const task = this.state.tasks.find((t: Task) => t.domain === domain);
+    async toggleTaskStatus(taskId: string) {
+        const task = this.state.tasks.find((t: Task) => t.id === taskId);
         if (task) {
             const newStatus = task.status === "启用" ? "禁用" : "启用";
-            return await this.updateTask(domain, { status: newStatus });
+            return await this.updateTask(taskId, { status: newStatus });
         }
         return false;
     }
 
-    async executeTask(domain: string) {
-        const task = this.state.tasks.find((t: Task) => t.domain === domain);
+    async executeTask(taskId: string) {
+        const task = this.state.tasks.find((t: Task) => t.id === taskId);
         if (task) {
+            // 检查任务是否启用
+            if (task.status !== "启用") {
+                return { ok: false, error: "任务未启用" };
+            }
+
+            // 保存原始状态，以便在执行失败时恢复
+            const originalStatus = task.status;
             task.lastRun = new Date();
             task.status = "进行中";
-            console.log(`执行任务: ${domain}`);
+            console.log(`执行任务: ${task.domain} (ID: ${taskId})`);
 
             try {
                 const response = await chrome.runtime.sendMessage({
                     type: "runTaskNow",
-                    taskId: task.id,
+                    taskId: taskId,
                 });
                 console.log("任务执行请求已发送到background脚本", response);
-                return response;
+
+                // 检查background脚本返回的结果
+                if (response && response.ok) {
+                    return response;
+                } else {
+                    // 执行失败时恢复原始状态
+                    task.status = originalStatus;
+                    return { ok: false, error: "任务执行失败" };
+                }
             } catch (error) {
                 console.error("发送任务执行请求失败", error);
+                // 执行失败时恢复原始状态
+                task.status = originalStatus;
                 return { ok: false, error: (error as Error).message };
             }
         }

@@ -191,7 +191,7 @@ async function isDomainAuthorized(domain: string): Promise<boolean> {
 async function runTask(taskId: string) {
     const tasks = await getTasks();
     const task = tasks.find((t) => t.id === taskId);
-    if (!task || !task.enabled) return;
+    if (!task || !task.enabled) return false;
 
     // 检查域名是否已授权
     const isAuthorized = await isDomainAuthorized(task.domain);
@@ -202,7 +202,7 @@ async function runTask(taskId: string) {
             message: `Domain ${task.domain} not authorized.`,
             iconUrl: "/icons/icon48.png",
         });
-        return;
+        return false;
     }
 
     const domains = task.domain ? [task.domain] : [];
@@ -268,6 +268,8 @@ async function runTask(taskId: string) {
             }.`,
             iconUrl: "/icons/icon48.png",
         });
+
+        return true;
     } catch (err: any) {
         console.error("Failed to send task:", err);
         chrome.notifications.create("", {
@@ -276,6 +278,7 @@ async function runTask(taskId: string) {
             message: `Task ${task?.name} failed: ${err?.message || err}`,
             iconUrl: "/icons/icon48.png",
         });
+        return false;
     } finally {
         if (task) scheduleNext(task);
     }
@@ -289,8 +292,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true;
     }
     if (msg?.type === "runTaskNow" && msg.taskId) {
-        runTask(msg.taskId);
-        sendResponse({ ok: true });
+        runTask(msg.taskId).then((result) => {
+            sendResponse({ ok: result });
+        });
         return true;
     }
     if (msg?.type === "getTasks") {

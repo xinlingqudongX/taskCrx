@@ -42,13 +42,20 @@ onMounted(() => {
     checkAllDomainAuthorizations();
 });
 
-const removeTask = (domain) => {
+const removeTask = (taskId, domain) => {
     if (confirm(`确定要删除任务 ${domain} 吗？`)) {
-        domainStore.removeTask(domain);
+        domainStore.removeTask(taskId);
     }
 };
 
-const executeTask = async (domain) => {
+const executeTask = async (taskId, domain) => {
+    // 检查任务是否启用
+    const task = domainStore.getTasks().find(t => t.id === taskId);
+    if (task && task.status !== "启用") {
+        alert(`任务 ${domain} 未启用，无法执行`);
+        return;
+    }
+    
     // 检查域名是否已授权
     const authorized = await domainStore.checkDomainAuthorization(domain);
     if (!authorized) {
@@ -58,7 +65,7 @@ const executeTask = async (domain) => {
 
     // 通过background脚本执行任务
     try {
-        const result = await domainStore.executeTask(domain);
+        const result = await domainStore.executeTask(taskId);
         if (result && result.ok) {
             console.log(`任务 ${domain} 已发送到background脚本执行`);
         } else {
@@ -69,8 +76,8 @@ const executeTask = async (domain) => {
     }
 };
 
-const toggleTaskStatus = async (domain) => {
-    await domainStore.toggleTaskStatus(domain);
+const toggleTaskStatus = async (taskId) => {
+    await domainStore.toggleTaskStatus(taskId);
 };
 
 const editTask = (task) => {
@@ -157,7 +164,7 @@ const taskColumns = [
         render: (row) =>
             h(NSwitch, {
                 value: row.enabled,
-                onUpdateValue: () => toggleTaskStatus(row.domain),
+                onUpdateValue: () => toggleTaskStatus(row.id),
                 checkedValue: true,
                 uncheckedValue: false,
                 size: "small",
@@ -281,7 +288,7 @@ const taskColumns = [
                         type: "info",
                         tertiary: true,
                         style: "margin-right: 5px;",
-                        onClick: () => executeTask(row.domain),
+                        onClick: () => executeTask(row.id, row.domain),
                         disabled: !domainAuthStatus.value[row.domain],
                     },
                     { default: () => "执行" }
@@ -292,7 +299,7 @@ const taskColumns = [
                         size: "small",
                         type: "error",
                         tertiary: true,
-                        onClick: () => removeTask(row.domain),
+                        onClick: () => removeTask(row.id, row.domain),
                     },
                     { default: () => "删除" }
                 ),
