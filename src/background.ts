@@ -3,6 +3,7 @@ import {
     collectAllAppData,
     getJiguangTokenFromCookie,
 } from "./utils/app-collector";
+import { cookieKeeper, CookieRefreshStrategy } from "./utils/cookie-keeper";
 import type { CollectedAppData, Task, TaskExecutionData } from "./types/index";
 
 const USE_SYNC_STORAGE = true;
@@ -226,6 +227,24 @@ async function runTask(taskId: string) {
         // 收集应用数据（如果启用）
         if (task.appDataConfig) {
             appData = await collectAppData(task);
+
+            // 检测是否因为cookie失效导致数据收集失败
+            if (!appData) {
+                console.warn('应用数据收集失败，可能是cookie已失效');
+
+                // 检查cookie有效性
+                const cookieStatus = await cookieKeeper.checkCookieValidity();
+
+                if (!cookieStatus.jiguang && task.appDataConfig.collectJiguangData) {
+                    console.warn('检测到极光cookie失效，尝试处理...');
+                    CookieRefreshStrategy.handleExpiredCookie('jiguang');
+                }
+
+                if (!cookieStatus.apple && task.appDataConfig.collectAppleData) {
+                    console.warn('检测到苹果cookie失效，尝试处理...');
+                    CookieRefreshStrategy.handleExpiredCookie('apple');
+                }
+            }
         }
 
         // 构建请求数据
@@ -306,12 +325,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === "saveTask") {
         getTasks().then((tasks) => {
             const existingIndex = tasks.findIndex((t) => t.id === msg.task.id);
+            let isUpdate = false;
             if (existingIndex >= 0) {
                 tasks[existingIndex] = msg.task;
+                isUpdate = true;
             } else {
                 tasks.push(msg.task);
             }
             setTasks(tasks).then(() => {
+                // 先清除旧的alarm（如果存在）
+                chrome.alarms.clear(msg.task.id);
+
+                // 如果任务已启用，重新创建定时任务
+                if (msg.task.enabled) {
+                    scheduleNext(msg.task);
+                }
                 sendResponse({ ok: true });
             });
         });
@@ -321,6 +349,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         getTasks().then((tasks) => {
             const filteredTasks = tasks.filter((t) => t.id !== msg.taskId);
             setTasks(filteredTasks).then(() => {
+                // 删除任务时清除对应的alarm
+                chrome.alarms.clear(msg.taskId);
                 sendResponse({ ok: true });
             });
         });
@@ -387,6 +417,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         return true;
     }
+
+    // Cookie保活相关消息处理
+    if (msg?.type === "checkCookieStatus") {
+        cookieKeeper.checkCookieValidity().then((status) => {
+            sendResponse(status);
+        });
+        return true;
+    }
+
+    if (msg?.type === "manualKeepAlive") {
+        cookieKeeper.manualKeepAlive().then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+
+    if (msg?.type === "smartRefresh") {
+        CookieRefreshStrategy.smartRefresh().then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+
+    if (msg?.type === "getCookieKeeperStatus") {
+        const status = cookieKeeper.getStatus();
+        sendResponse(status);
+        return true;
+    }
+
+    if (msg?.type === "updateCookieKeeperConfig") {
+        cookieKeeper.updateConfig(msg.config);
+        sendResponse({ ok: true });
+        return true;
+    }
 });
 
 // alarm handler
@@ -406,4 +470,15 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.runtime.onInstalled.addListener(async () => {
     const tasks = await getTasks();
     for (const t of tasks) scheduleNext(t);
+
+    // 启动cookie保活服务
+    cookieKeeper.start();
+    console.log('Cookie保活服务已启动');
+});
+
+// on startup: restart cookie keeper
+chrome.runtime.onStartup.addListener(async () => {
+    // 启动cookie保活服务
+    cookieKeeper.start();
+    console.log('Cookie保活服务已重启');
 });

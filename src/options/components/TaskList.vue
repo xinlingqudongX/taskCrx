@@ -51,8 +51,14 @@ const removeTask = (taskId, domain) => {
 const executeTask = async (taskId, domain) => {
     // 检查任务是否启用
     const task = domainStore.getTasks().find(t => t.id === taskId);
-    if (task && task.status !== "启用") {
+    if (task && !task.enabled) {
         alert(`任务 ${domain} 未启用，无法执行`);
+        return;
+    }
+
+    // 检查任务是否正在执行中
+    if (task && task.status === "进行中") {
+        alert(`任务 ${domain} 正在执行中，请稍候`);
         return;
     }
     
@@ -67,12 +73,15 @@ const executeTask = async (taskId, domain) => {
     try {
         const result = await domainStore.executeTask(taskId);
         if (result && result.ok) {
-            console.log(`任务 ${domain} 已发送到background脚本执行`);
+            console.log(`任务 ${domain} 执行成功`);
+            // 可以添加一个成功提示
         } else {
             console.error(`任务 ${domain} 执行失败`, result?.error);
+            alert(`任务 ${domain} 执行失败: ${result?.error || "未知错误"}`);
         }
     } catch (error) {
         console.error(`任务 ${domain} 执行出错:`, error);
+        alert(`任务 ${domain} 执行出错: ${error.message || "未知错误"}`);
     }
 };
 
@@ -289,9 +298,10 @@ const taskColumns = [
                         tertiary: true,
                         style: "margin-right: 5px;",
                         onClick: () => executeTask(row.id, row.domain),
-                        disabled: !domainAuthStatus.value[row.domain],
+                        disabled: !domainAuthStatus.value[row.domain] || !row.enabled || row.status === "进行中",
+                        loading: row.status === "进行中",
                     },
-                    { default: () => "执行" }
+                    { default: () => row.status === "进行中" ? "执行中..." : "执行" }
                 ),
                 h(
                     NButton,

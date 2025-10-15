@@ -48,6 +48,55 @@
             <domain-list />
         </n-card>
 
+        <!-- Cookie状态监控区域 -->
+        <n-card title="Cookie状态监控">
+            <n-space vertical>
+                <n-space align="center">
+                    <n-tag :type="cookieStatus.jiguang ? 'success' : 'error'">
+                        极光推送: {{ cookieStatus.jiguang ? '正常' : '失效' }}
+                    </n-tag>
+                    <n-tag :type="cookieStatus.apple ? 'success' : 'error'">
+                        苹果开发者: {{ cookieStatus.apple ? '正常' : '失效' }}
+                    </n-tag>
+                    <n-button
+                        @click="checkCookieStatus"
+                        size="small"
+                        type="primary"
+                        :loading="cookieStatusLoading"
+                    >
+                        检查状态
+                    </n-button>
+                    <n-button
+                        @click="manualKeepAlive"
+                        size="small"
+                        type="info"
+                        :loading="keepAliveLoading"
+                    >
+                        手动保活
+                    </n-button>
+                    <n-button
+                        @click="smartRefresh"
+                        size="small"
+                        type="warning"
+                        :loading="refreshLoading"
+                    >
+                        智能刷新
+                    </n-button>
+                </n-space>
+                <n-space align="center" v-if="keeperStatus">
+                    <n-text depth="3">
+                        保活服务: {{ keeperStatus.isRunning ? '运行中' : '已停止' }}
+                    </n-text>
+                    <n-text depth="3">
+                        保活间隔: {{ Math.round(keeperStatus.config?.interval / 60000) || 0 }}分钟
+                    </n-text>
+                    <n-text depth="3">
+                        最后检查: {{ lastCheckTime }}
+                    </n-text>
+                </n-space>
+            </n-space>
+        </n-card>
+
         <!-- 任务区域 -->
         <n-card title="任务列表">
             <task-list />
@@ -232,6 +281,14 @@ const infoModalVisible = ref(false);
 const authModalVisible = ref(false);
 const taskModalVisible = ref(false);
 const editingTask = ref(null);
+
+// Cookie状态管理相关
+const cookieStatus = ref({ jiguang: false, apple: false });
+const keeperStatus = ref(null);
+const lastCheckTime = ref('未检查');
+const cookieStatusLoading = ref(false);
+const keepAliveLoading = ref(false);
+const refreshLoading = ref(false);
 
 const formValue = reactive({
     domain: "",
@@ -433,7 +490,7 @@ const handleSaveTask = async (e) => {
 
             if (editingTask.value) {
                 // 更新任务
-                await domainStore.updateTask(editingTask.value.domain, {
+                await domainStore.updateTask(editingTask.value.id, {
                     name: taskFormValue.name,
                     cron: taskFormValue.cron,
                     apiEndpoint: taskFormValue.apiEndpoint,
@@ -556,4 +613,73 @@ eventBus.on('editTask', (task) => {
 
 // 暴露事件总线给全局
 window.eventBus = eventBus;
+
+// Cookie管理相关方法
+const checkCookieStatus = async () => {
+    cookieStatusLoading.value = true;
+    try {
+        const status = await domainStore.checkCookieStatus();
+        cookieStatus.value = status;
+        lastCheckTime.value = new Date().toLocaleTimeString();
+
+        // 同时获取保活服务状态
+        const keeperStatusData = await domainStore.getCookieKeeperStatus();
+        keeperStatus.value = keeperStatusData;
+
+        console.log('Cookie状态:', status);
+    } catch (error) {
+        console.error('检查Cookie状态失败:', error);
+    } finally {
+        cookieStatusLoading.value = false;
+    }
+};
+
+const manualKeepAlive = async () => {
+    keepAliveLoading.value = true;
+    try {
+        const result = await domainStore.manualKeepAlive();
+        cookieStatus.value = result;
+        lastCheckTime.value = new Date().toLocaleTimeString();
+        console.log('手动保活结果:', result);
+
+        // 显示结果提示
+        const message = `保活结果: 极光${result.jiguang ? '成功' : '失败'}, 苹果${result.apple ? '成功' : '失败'}`;
+        alert(message);
+    } catch (error) {
+        console.error('手动保活失败:', error);
+        alert('手动保活失败');
+    } finally {
+        keepAliveLoading.value = false;
+    }
+};
+
+const smartRefresh = async () => {
+    refreshLoading.value = true;
+    try {
+        const result = await domainStore.smartRefresh();
+        console.log('智能刷新结果:', result);
+
+        // 刷新cookie状态
+        await checkCookieStatus();
+
+        // 显示结果提示
+        const messages = [];
+        if (result.jiguang === 'expired') messages.push('极光推送需要重新登录');
+        if (result.apple === 'expired') messages.push('苹果开发者需要重新登录');
+
+        if (messages.length > 0) {
+            alert(messages.join('\n'));
+        } else {
+            alert('Cookie状态正常');
+        }
+    } catch (error) {
+        console.error('智能刷新失败:', error);
+        alert('智能刷新失败');
+    } finally {
+        refreshLoading.value = false;
+    }
+};
+
+// 页面加载时检查Cookie状态
+checkCookieStatus();
 </script>

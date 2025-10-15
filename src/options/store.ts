@@ -290,8 +290,13 @@ class DomainStore {
         const task = this.state.tasks.find((t: Task) => t.id === taskId);
         if (task) {
             // 检查任务是否启用
-            if (task.status !== "启用") {
+            if (!task.enabled) {
                 return { ok: false, error: "任务未启用" };
+            }
+
+            // 检查任务是否正在执行中
+            if (task.status === "进行中") {
+                return { ok: false, error: "任务正在执行中" };
             }
 
             // 保存原始状态，以便在执行失败时恢复
@@ -309,6 +314,14 @@ class DomainStore {
 
                 // 检查background脚本返回的结果
                 if (response && response.ok) {
+                    // 任务执行成功，恢复到启用状态并更新最后执行时间
+                    task.status = task.enabled ? "启用" : "禁用";
+
+                    // 延迟刷新任务列表以获取最新的lastRun时间
+                    setTimeout(async () => {
+                        await this.refreshTasksFromBackground();
+                    }, 1000);
+
                     return response;
                 } else {
                     // 执行失败时恢复原始状态
@@ -323,6 +336,83 @@ class DomainStore {
             }
         }
         return { ok: false, error: "任务不存在" };
+    }
+
+    // 从background刷新任务列表
+    async refreshTasksFromBackground() {
+        try {
+            const tasksResponse = await chrome.runtime.sendMessage({
+                type: "getTasks",
+            });
+            if (tasksResponse && tasksResponse.tasks) {
+                this.state.tasks = tasksResponse.tasks.map((task: any) => ({
+                    ...task,
+                    name: task.name || task.domain,
+                    status: task.enabled ? "启用" : "禁用",
+                    lastRun: task.lastRun ? new Date(task.lastRun) : null,
+                    nextRun: null,
+                    apiEndpoint: task.targetUrl || "",
+                    includeAppData: task.includeAppData || false,
+                    appDataConfig: task.appDataConfig || {
+                        collectJiguangData: false,
+                        collectAppleData: false,
+                        maxApps: 50,
+                    },
+                }));
+                console.log("已从background刷新任务列表");
+            }
+        } catch (error) {
+            console.error("刷新任务列表失败", error);
+        }
+    }
+
+    // Cookie管理相关方法
+    async checkCookieStatus(): Promise<{jiguang: boolean; apple: boolean}> {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "checkCookieStatus",
+            });
+            return response || { jiguang: false, apple: false };
+        } catch (error) {
+            console.error("检查Cookie状态失败", error);
+            return { jiguang: false, apple: false };
+        }
+    }
+
+    async manualKeepAlive(): Promise<{jiguang: boolean; apple: boolean}> {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "manualKeepAlive",
+            });
+            return response || { jiguang: false, apple: false };
+        } catch (error) {
+            console.error("手动保活失败", error);
+            return { jiguang: false, apple: false };
+        }
+    }
+
+    async smartRefresh(): Promise<{jiguang: string; apple: string}> {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "smartRefresh",
+            });
+            return response || { jiguang: 'expired', apple: 'expired' };
+        } catch (error) {
+            console.error("智能刷新失败", error);
+            return { jiguang: 'expired', apple: 'expired' };
+        }
+    }
+
+    async getCookieKeeperStatus(): Promise<any> {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "getCookieKeeperStatus",
+            });
+            return response || null;
+        } catch (error) {
+            console.error("获取Cookie保活状态失败", error);
+            return null;
+        }
     }
 
     // 检查域名是否已授权
