@@ -9,7 +9,7 @@
 </template>
 
 <script setup>
-import { h, onMounted, ref, watch } from "vue";
+import { h, onMounted, onUnmounted, ref, watch } from "vue";
 import { NButton, NTag, NDataTable, NText, NSwitch } from "naive-ui";
 import { domainStore } from "../store";
 
@@ -38,8 +38,24 @@ watch(
     { deep: true }
 );
 
+// 定期刷新任务列表以保持数据同步
+let refreshInterval = null;
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+});
+
 onMounted(() => {
     checkAllDomainAuthorizations();
+
+    // 每30秒刷新一次任务列表，确保显示最新的执行时间
+    refreshInterval = setInterval(async () => {
+        await domainStore.refreshTasksFromBackground();
+    }, 30000);
 });
 
 const removeTask = (taskId, domain) => {

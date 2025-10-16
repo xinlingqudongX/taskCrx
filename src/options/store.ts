@@ -301,7 +301,6 @@ class DomainStore {
 
             // 保存原始状态，以便在执行失败时恢复
             const originalStatus = task.status;
-            task.lastRun = new Date();
             task.status = "进行中";
             console.log(`执行任务: ${task.domain} (ID: ${taskId})`);
 
@@ -314,13 +313,11 @@ class DomainStore {
 
                 // 检查background脚本返回的结果
                 if (response && response.ok) {
-                    // 任务执行成功，恢复到启用状态并更新最后执行时间
+                    // 任务执行成功，恢复到启用状态
                     task.status = task.enabled ? "启用" : "禁用";
 
-                    // 延迟刷新任务列表以获取最新的lastRun时间
-                    setTimeout(async () => {
-                        await this.refreshTasksFromBackground();
-                    }, 1000);
+                    // 立即刷新任务列表以获取最新的lastRun时间
+                    await this.refreshTasksFromBackground();
 
                     return response;
                 } else {

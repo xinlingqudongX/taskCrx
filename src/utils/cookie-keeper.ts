@@ -294,11 +294,32 @@ export class CookieRefreshStrategy {
             iconUrl: "/icons/icon48.png",
         });
 
-        // 创建新标签页引导用户登录
-        chrome.tabs.create({
-            url: urls[service],
-            active: true,
-        });
+        // 检查是否已有相同URL的标签页打开
+        const targetUrl = urls[service];
+        const existingTabs = await chrome.tabs.query({ url: `${targetUrl}*` });
+
+        if (existingTabs.length > 0) {
+            // 如果已有相同域名的标签页，聚焦到第一个
+            const tab = existingTabs[0];
+            if (tab.id) {
+                chrome.tabs.update(tab.id, { active: true });
+                if (tab.windowId) {
+                    chrome.windows.update(tab.windowId, { focused: true });
+                }
+            }
+            console.log(`${serviceNames[service]}登录页面已存在，切换到现有标签页`);
+        } else {
+            // 创建新标签页引导用户登录
+            try {
+                const newTab = await chrome.tabs.create({
+                    url: targetUrl,
+                    active: true,
+                });
+                console.log(`为${serviceNames[service]}创建新的登录标签页`);
+            } catch (error) {
+                console.error(`创建${serviceNames[service]}标签页失败:`, error);
+            }
+        }
     }
 
     /**

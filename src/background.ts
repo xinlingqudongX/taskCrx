@@ -275,8 +275,10 @@ async function runTask(taskId: string) {
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         await setLastSent(task.id);
 
-        // 更新任务的最后执行时间
+        // 更新任务的最后执行时间和状态（成功）
         task.lastRun = Date.now();
+        task.lastExecutionStatus = 'success';
+        task.lastExecutionError = undefined;
         await setTasks(tasks);
 
         chrome.notifications.create("", {
@@ -291,6 +293,15 @@ async function runTask(taskId: string) {
         return true;
     } catch (err: any) {
         console.error("Failed to send task:", err);
+
+        // 更新任务的最后执行时间和状态（失败）
+        if (task) {
+            task.lastRun = Date.now();
+            task.lastExecutionStatus = 'failed';
+            task.lastExecutionError = err?.message || String(err);
+            await setTasks(tasks);
+        }
+
         chrome.notifications.create("", {
             type: "basic",
             title: "Cookie Collector - Failed",

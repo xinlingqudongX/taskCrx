@@ -23,6 +23,10 @@ export interface Task {
     concurrent?: number;
     /** 最后执行时间 */
     lastRun?: number;
+    /** 最后执行状态 */
+    lastExecutionStatus?: 'success' | 'failed';
+    /** 最后执行失败原因 */
+    lastExecutionError?: string;
     /** 应用数据配置 */
     appDataConfig?: AppDataConfig;
 }
