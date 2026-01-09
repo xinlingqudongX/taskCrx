@@ -284,3 +284,221 @@ export interface TaskExecutionData {
     account: string;
     type: string;
 }
+
+// ==================== Cookie分享功能类型定义 ====================
+
+/**
+ * 完整的Cookie数据接口
+ * 包含Chrome Cookie API返回的所有属性
+ * @interface FullCookie
+ */
+export interface FullCookie {
+    /** Cookie名称 */
+    name: string;
+    /** Cookie值 */
+    value: string;
+    /** Cookie所属域名 */
+    domain: string;
+    /** Cookie路径 */
+    path: string;
+    /** 过期时间（Unix时间戳，秒） */
+    expirationDate?: number;
+    /** 是否仅HTTP访问 */
+    httpOnly: boolean;
+    /** 是否安全连接 */
+    secure: boolean;
+    /** SameSite策略 */
+    sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict';
+    /** 是否为主机专用Cookie */
+    hostOnly?: boolean;
+    /** 是否为会话Cookie */
+    session?: boolean;
+    /** 存储ID */
+    storeId?: string;
+}
+
+/**
+ * 分享数据接口
+ * @interface ShareData
+ */
+export interface ShareData {
+    /** 版本号 */
+    version: string;
+    /** 域名 */
+    domain: string;
+    /** Cookie数据（完整Cookie数组） */
+    cookies: FullCookie[];
+    /** 时间戳 */
+    timestamp: number;
+    /** 数据校验和 */
+    checksum: string;
+}
+
+/**
+ * 导出文件元数据接口
+ * @interface ExportFileMetadata
+ */
+export interface ExportFileMetadata {
+    /** 文件名 */
+    filename: string;
+    /** 数据大小 */
+    dataSize: number;
+    /** 压缩算法 */
+    compression: 'zlib' | 'none';
+}
+
+/**
+ * Cookie收集器接口
+ * @interface CookieCollector
+ */
+export interface CookieCollector {
+    /**
+     * 收集指定域名的所有Cookie（完整属性）
+     * @param domain - 域名
+     * @returns Promise<FullCookie[]> 完整Cookie数组
+     */
+    collectCookies(domain: string): Promise<FullCookie[]>;
+
+    /**
+     * 收集指定域名的Cookie键值对（简化版）
+     * @param domain - 域名
+     * @returns Promise<Record<string, string>> Cookie键值对
+     */
+    collectCookiesSimple(domain: string): Promise<Record<string, string>>;
+
+    /**
+     * 检查域名是否有Cookie
+     * @param domain - 域名
+     * @returns Promise<boolean>
+     */
+    hasCookies(domain: string): Promise<boolean>;
+}
+
+/**
+ * Cookie序列化器接口
+ * @interface CookieSerializer
+ */
+export interface CookieSerializer {
+    /**
+     * 序列化Cookie数据为JSON字符串
+     * @param cookies - 完整Cookie数组
+     * @param domain - 域名
+     * @returns string JSON字符串
+     */
+    serialize(cookies: FullCookie[], domain: string): string;
+
+    /**
+     * 反序列化JSON字符串为Cookie数据
+     * @param jsonString - JSON字符串
+     * @returns { domain: string, cookies: FullCookie[] }
+     */
+    deserialize(jsonString: string): { domain: string; cookies: FullCookie[] };
+
+    /**
+     * 压缩序列化数据
+     * @param data - 序列化后的数据
+     * @returns Uint8Array 压缩后的二进制数据
+     */
+    compress(data: string): Uint8Array;
+
+    /**
+     * 解压缩数据
+     * @param compressedData - 压缩后的二进制数据
+     * @returns string 解压后的字符串
+     */
+    decompress(compressedData: Uint8Array): string;
+}
+
+/**
+ * Cookie文件导出器接口
+ * @interface CookieFileExporter
+ */
+export interface CookieFileExporter {
+    /**
+     * 导出Cookie数据为文件
+     * @param cookies - 完整Cookie数组
+     * @param domain - 域名
+     * @returns { filename: string, blob: Blob, dataSize: number } 导出的文件信息
+     */
+    export(cookies: FullCookie[], domain: string): { filename: string; blob: Blob; dataSize: number };
+
+    /**
+     * 触发文件下载
+     * @param exportedFile - 导出的文件信息
+     */
+    download(exportedFile: { filename: string; blob: Blob }): void;
+
+    /**
+     * 获取文件扩展名
+     * @returns string 文件扩展名
+     */
+    getFileExtension(): string;
+}
+
+/**
+ * Cookie文件导入器接口
+ * @interface CookieFileImporter
+ */
+export interface CookieFileImporter {
+    /**
+     * 从文件导入Cookie数据
+     * @param file - 文件对象
+     * @returns Promise<{ domain: string, cookies: FullCookie[], cookieCount: number }> 导入结果
+     */
+    import(file: File): Promise<{ domain: string; cookies: FullCookie[]; cookieCount: number }>;
+
+    /**
+     * 从Base64字符串导入Cookie数据
+     * @param base64String - Base64编码的数据
+     * @returns { domain: string, cookies: FullCookie[], cookieCount: number } 导入结果
+     */
+    importFromBase64(base64String: string): { domain: string; cookies: FullCookie[]; cookieCount: number };
+
+    /**
+     * 获取支持的文件扩展名
+     * @returns string[] 支持的扩展名列表
+     */
+    getSupportedExtensions(): string[];
+}
+
+/**
+ * Cookie分享服务接口
+ * @interface CookieSharingService
+ */
+export interface CookieSharingService {
+    /**
+     * 生成分享文件
+     * @param domain - 域名
+     * @returns Promise<{ file: { filename: string, blob: Blob, dataSize: number }, dataSize: number }>
+     */
+    generateShareFile(domain: string): Promise<{ file: { filename: string; blob: Blob; dataSize: number }; dataSize: number }>;
+
+    /**
+     * 下载分享文件
+     * @param domain - 域名
+     * @returns Promise<{ filename: string, dataSize: number }>
+     */
+    downloadShareFile(domain: string): Promise<{ filename: string; dataSize: number }>;
+
+    /**
+     * 从文件导入Cookie数据
+     * @param file - 文件对象
+     * @returns Promise<{ domain: string, cookieCount: number }>
+     */
+    importFromFile(file: File): Promise<{ domain: string; cookieCount: number }>;
+
+    /**
+     * 从Base64字符串导入Cookie数据
+     * @param base64Data - Base64编码的数据
+     * @returns Promise<{ domain: string, cookieCount: number }>
+     */
+    importFromBase64(base64Data: string): Promise<{ domain: string; cookieCount: number }>;
+
+    /**
+     * 设置Cookie（完整属性）
+     * @param domain - 域名
+     * @param cookies - 完整Cookie数组
+     * @returns Promise<void>
+     */
+    setCookies(domain: string, cookies: FullCookie[]): Promise<void>;
+}

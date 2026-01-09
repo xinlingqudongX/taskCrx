@@ -1,5 +1,6 @@
 <template>
-    <n-space vertical>
+    <n-message-provider>
+        <n-space vertical>
         <!-- 顶部栏 -->
         <n-layout-header bordered>
             <n-space align="center" style="padding: 12px">
@@ -101,144 +102,145 @@
         <n-card title="任务列表">
             <task-list />
         </n-card>
-    </n-space>
 
-    <!-- 功能介绍弹窗 -->
-    <n-modal
-        v-model:show="infoModalVisible"
-        preset="dialog"
-        title="插件功能介绍"
-    >
-        <p>此插件用于收集用户授权域名的 Cookie，并以 JSON 格式提交。</p>
-        <p>使用方法：</p>
-        <n-ul>
-            <n-li>点击"添加授权域名"按钮添加需要收集 Cookie 的域名</n-li>
-            <n-li>点击"添加任务"按钮为域名创建收集任务</n-li>
-            <n-li>可以设置任务的执行时间、API端点和请求头</n-li>
-            <n-li>插件会自动收集已授权域名的 Cookie 信息</n-li>
-            <n-li>任务状态会在"任务列表"中显示</n-li>
-            <n-li>可以使用"导入/导出"功能备份和恢复任务配置</n-li>
-        </n-ul>
-        <template #action>
-            <n-button @click="infoModalVisible = false">关闭</n-button>
-        </template>
-    </n-modal>
+        <!-- 功能介绍弹窗 -->
+        <n-modal
+            v-model:show="infoModalVisible"
+            preset="dialog"
+            title="插件功能介绍"
+        >
+            <p>此插件用于收集用户授权域名的 Cookie，并以 JSON 格式提交。</p>
+            <p>使用方法：</p>
+            <n-ul>
+                <n-li>点击"添加授权域名"按钮添加需要收集 Cookie 的域名</n-li>
+                <n-li>点击"添加任务"按钮为域名创建收集任务</n-li>
+                <n-li>可以设置任务的执行时间、API端点和请求头</n-li>
+                <n-li>插件会自动收集已授权域名的 Cookie 信息</n-li>
+                <n-li>任务状态会在"任务列表"中显示</n-li>
+                <n-li>可以使用"导入/导出"功能备份和恢复任务配置</n-li>
+            </n-ul>
+            <template #action>
+                <n-button @click="infoModalVisible = false">关闭</n-button>
+            </template>
+        </n-modal>
 
-    <!-- 授权域名弹窗 -->
-    <n-modal
-        v-model:show="authModalVisible"
-        preset="dialog"
-        title="添加授权域名"
-    >
-        <n-form :model="formValue" :rules="rules" ref="formRef">
-            <n-form-item label="域名" path="domain">
-                <n-input
-                    v-model:value="formValue.domain"
-                    placeholder="请输入域名，如 example.com"
-                />
-            </n-form-item>
-        </n-form>
-        <template #action>
-            <n-space>
-                <n-button @click="authModalVisible = false">取消</n-button>
-                <n-button @click="handleAddDomain" type="primary"
-                    >添加</n-button
-                >
-            </n-space>
-        </template>
-    </n-modal>
+        <!-- 授权域名弹窗 -->
+        <n-modal
+            v-model:show="authModalVisible"
+            preset="dialog"
+            title="添加授权域名"
+        >
+            <n-form :model="formValue" :rules="rules" ref="formRef">
+                <n-form-item label="域名" path="domain">
+                    <n-input
+                        v-model:value="formValue.domain"
+                        placeholder="请输入域名，如 example.com"
+                    />
+                </n-form-item>
+            </n-form>
+            <template #action>
+                <n-space>
+                    <n-button @click="authModalVisible = false">取消</n-button>
+                    <n-button @click="handleAddDomain" type="primary"
+                        >添加</n-button
+                    >
+                </n-space>
+            </template>
+        </n-modal>
 
-    <!-- 添加/编辑任务弹窗 -->
-    <n-modal
-        v-model:show="taskModalVisible"
-        preset="dialog"
-        :title="editingTask ? '编辑任务' : '添加任务'"
-        style="width: 600px"
-    >
-        <n-form :model="taskFormValue" :rules="taskRules" ref="taskFormRef">
-            <n-form-item label="域名" path="domain">
-                <n-select
-                    v-model:value="taskFormValue.domain"
-                    :options="domainOptions"
-                    placeholder="请选择域名"
-                    :disabled="!!editingTask"
-                />
-            </n-form-item>
-            <n-form-item label="任务名称" path="name">
-                <n-input
-                    v-model:value="taskFormValue.name"
-                    placeholder="请输入任务名称"
-                />
-            </n-form-item>
-            <n-form-item label="Cron表达式" path="cron">
-                <n-input
-                    v-model:value="taskFormValue.cron"
-                    placeholder="例如: */30 * * * * (每30分钟执行一次)"
-                />
-            </n-form-item>
-            <n-form-item label="API端点" path="apiEndpoint">
-                <n-auto-complete
-                    v-model:value="taskFormValue.apiEndpoint"
-                    :options="apiEndpointOptions"
-                    placeholder="请输入或选择API端点URL"
-                    clearable
-                />
-            </n-form-item>
-            <n-form-item label="请求头 (JSON格式)" path="headers">
-                <n-input
-                    v-model:value="taskFormValue.headers"
-                    type="textarea"
-                    placeholder='{"Content-Type": "application/json", "Authorization": "Bearer token"}'
-                    :autosize="{ minRows: 3 }"
-                />
-            </n-form-item>
-            <n-form-item label="状态" path="enabled">
-                <n-switch v-model:value="taskFormValue.enabled">
-                    <template #checked>启用</template>
-                    <template #unchecked>禁用</template>
-                </n-switch>
-            </n-form-item>
-            
-            <n-form-item label="收集极光数据信息" path="collectJiguangData">
-                <n-switch v-model:value="taskFormValue.appDataConfig.collectJiguangData">
-                    <template #checked>启用</template>
-                    <template #unchecked>禁用</template>
-                </n-switch>
-                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                    启用后将收集极光推送的用户信息和应用列表数据
-                </n-text>
-            </n-form-item>
-            
-            <n-form-item label="收集苹果数据信息" path="collectAppleData">
-                <n-switch v-model:value="taskFormValue.appDataConfig.collectAppleData">
-                    <template #checked>启用</template>
-                    <template #unchecked>禁用</template>
-                </n-switch>
-                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                    启用后将收集苹果开发者的应用列表和团队信息
-                </n-text>
-            </n-form-item>
-            
-            <n-form-item label="最大应用数量" path="maxApps">
-                <n-input-number
-                    v-model:value="taskFormValue.appDataConfig.maxApps"
-                    :min="1"
-                    :max="1000"
-                    placeholder="请输入最大应用数量"
-                    style="width: 200px;"
-                />
-                <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
-                    限制收集的应用数量，防止请求过大
-                </n-text>
-            </n-form-item>
-        </n-form>
-        <template #action>
-            <n-space>
-                <n-button @click="taskModalVisible = false">取消</n-button>
-                <n-button @click="handleSaveTask" type="primary">保存</n-button>
-            </n-space>
-        </template>
-    </n-modal>
+        <!-- 添加/编辑任务弹窗 -->
+        <n-modal
+            v-model:show="taskModalVisible"
+            preset="dialog"
+            :title="editingTask ? '编辑任务' : '添加任务'"
+            style="width: 600px"
+        >
+            <n-form :model="taskFormValue" :rules="taskRules" ref="taskFormRef">
+                <n-form-item label="域名" path="domain">
+                    <n-select
+                        v-model:value="taskFormValue.domain"
+                        :options="domainOptions"
+                        placeholder="请选择域名"
+                        :disabled="!!editingTask"
+                    />
+                </n-form-item>
+                <n-form-item label="任务名称" path="name">
+                    <n-input
+                        v-model:value="taskFormValue.name"
+                        placeholder="请输入任务名称"
+                    />
+                </n-form-item>
+                <n-form-item label="Cron表达式" path="cron">
+                    <n-input
+                        v-model:value="taskFormValue.cron"
+                        placeholder="例如: */30 * * * * (每30分钟执行一次)"
+                    />
+                </n-form-item>
+                <n-form-item label="API端点" path="apiEndpoint">
+                    <n-auto-complete
+                        v-model:value="taskFormValue.apiEndpoint"
+                        :options="apiEndpointOptions"
+                        placeholder="请输入或选择API端点URL"
+                        clearable
+                    />
+                </n-form-item>
+                <n-form-item label="请求头 (JSON格式)" path="headers">
+                    <n-input
+                        v-model:value="taskFormValue.headers"
+                        type="textarea"
+                        placeholder='{"Content-Type": "application/json", "Authorization": "Bearer token"}'
+                        :autosize="{ minRows: 3 }"
+                    />
+                </n-form-item>
+                <n-form-item label="状态" path="enabled">
+                    <n-switch v-model:value="taskFormValue.enabled">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                </n-form-item>
+                
+                <n-form-item label="收集极光数据信息" path="collectJiguangData">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectJiguangData">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        启用后将收集极光推送的用户信息和应用列表数据
+                    </n-text>
+                </n-form-item>
+                
+                <n-form-item label="收集苹果数据信息" path="collectAppleData">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectAppleData">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        启用后将收集苹果开发者的应用列表和团队信息
+                    </n-text>
+                </n-form-item>
+                
+                <n-form-item label="最大应用数量" path="maxApps">
+                    <n-input-number
+                        v-model:value="taskFormValue.appDataConfig.maxApps"
+                        :min="1"
+                        :max="1000"
+                        placeholder="请输入最大应用数量"
+                        style="width: 200px;"
+                    />
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        限制收集的应用数量，防止请求过大
+                    </n-text>
+                </n-form-item>
+            </n-form>
+            <template #action>
+                <n-space>
+                    <n-button @click="taskModalVisible = false">取消</n-button>
+                    <n-button @click="handleSaveTask" type="primary">保存</n-button>
+                </n-space>
+            </template>
+        </n-modal>
+        </n-space>
+    </n-message-provider>
 </template>
 
 <script setup>
@@ -262,6 +264,7 @@ import {
     NSwitch,
     NDivider,
     NText,
+    NMessageProvider,
 } from "naive-ui";
 import {
     InformationCircleOutline,

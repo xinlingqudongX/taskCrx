@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import { crx } from "@crxjs/vite-plugin";
-// import manifest from "./public/manifest.json";
 import manifest from "./manifest.config";
 import zip from "vite-plugin-zip-pack";
 import vue from "@vitejs/plugin-vue";
@@ -20,9 +19,6 @@ export default defineConfig({
     server: {
         host: "localhost",
         port: 5173,
-        // cors: {
-        //     origin: [/chrome-extension:\/\//],
-        // },
         cors: true,
         allowedHosts: ["localhost"],
         hmr: {
@@ -35,11 +31,9 @@ export default defineConfig({
         target: "chrome107",
         outDir: "dist",
         assetsDir: "assets",
-        // ensure assets are emitted for extension packaging
         rollupOptions: {
             input: {
                 options: path.resolve(__dirname, "src/options/index.html"),
-                // background: "src/background.ts",
             },
         },
         sourcemap: true,

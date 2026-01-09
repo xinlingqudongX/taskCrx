@@ -493,3 +493,8 @@ chrome.runtime.onStartup.addListener(async () => {
     cookieKeeper.start();
     console.log('Cookie保活服务已重启');
 });
+
+// 点击插件图标时打开 options 页面
+chrome.action.onClicked.addListener(() => {
+    chrome.runtime.openOptionsPage();
+});
