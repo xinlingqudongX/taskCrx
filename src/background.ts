@@ -199,7 +199,7 @@ async function runTask(taskId: string) {
     if (!isAuthorized) {
         chrome.notifications.create("", {
             type: "basic",
-            title: "Cookie Collector",
+            title: "Team Session Share",
             message: `Domain ${task.domain} not authorized.`,
             iconUrl: "/icons/icon48.png",
         });
@@ -283,7 +283,7 @@ async function runTask(taskId: string) {
 
         chrome.notifications.create("", {
             type: "basic",
-            title: "Cookie Collector",
+            title: "Team Session Share - Success",
             message: `Task ${task.name} sent successfully${
                 appData ? " (with app data)" : ""
             }.`,
@@ -304,7 +304,7 @@ async function runTask(taskId: string) {
 
         chrome.notifications.create("", {
             type: "basic",
-            title: "Cookie Collector - Failed",
+            title: "Team Session Share - Failed",
             message: `Task ${task?.name} failed: ${err?.message || err}`,
             iconUrl: "/icons/icon48.png",
         });

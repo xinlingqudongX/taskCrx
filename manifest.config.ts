@@ -9,8 +9,8 @@ const cspPolicy = isDev
 
 export default defineManifest({
     manifest_version: 3,
-    name: "Cookie Data Collector",
-    short_name: "Cookie Collector",
+    name: "Team Session Share",
+    short_name: "Team Session Share",
     version: packageJson.version,
     description: packageJson.description,
     permissions: [
@@ -43,7 +43,7 @@ export default defineManifest({
         open_in_tab: true,
     },
     action: {
-        default_title: "Cookie Collector",
+        default_title: "Team Session Share",
     },
     icons: {
         "48": "icons/icon48.png",

@@ -1,7 +1,7 @@
 {
-    "name": "cookie-collector",
-    "version": "1.0.1",
-    "description": "Collect cookies from user-authorized domains and POST as JSON.",
+    "name": "team-session-sync",
+    "version": "1.0.2",
+    "description": "Share the session with other users in the same team.",
     "private": true,
     "scripts": {
         "dev": "vite",
