@@ -23,6 +23,7 @@ export default defineManifest({
         "tabs",
         "clipboardRead",
         "clipboardWrite",
+        "debugger",
     ],
     optional_permissions: [],
     host_permissions: [
