@@ -33,7 +33,7 @@ export default defineConfig({
         assetsDir: "assets",
         rollupOptions: {
             input: {
-                options: path.resolve(__dirname, "src/options/index.html"),
+                popup: path.resolve(__dirname, "src/popup/index.html"),
             },
         },
         sourcemap: true,

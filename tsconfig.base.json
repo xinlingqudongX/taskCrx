@@ -7,13 +7,12 @@
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true,
-        "outDir": "dist",
         "noImplicitAny": false,
-        // WASM模块支持
         "moduleResolution": "bundler",
         "resolveJsonModule": true,
         "allowSyntheticDefaultImports": true,
-        "types": ["node", "chrome"]
-    },
-    "include": ["src/**/*"]
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true
+    }
 }

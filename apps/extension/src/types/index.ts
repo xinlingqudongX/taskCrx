@@ -603,3 +603,24 @@ export interface NetworkMonitorConfig {
     protoDecode: boolean;
     maxBufferSize: number;
 }
+
+// ==================== WebSocket 连接配置 ====================
+
+/** WebSocket 连接配置 */
+export interface WSConnectionConfig {
+    serverUrl: string;
+    roomId: string;
+    userId: string;
+    userName?: string;
+    autoReconnect?: boolean;
+    autoApplyCookies?: boolean;
+}
+
+/** WebSocket 连接状态 */
+export interface WSConnectionStatus {
+    connected: boolean;
+    roomId: string | null;
+    userId: string | null;
+    onlineUsers: number;
+    lastError?: string;
+}

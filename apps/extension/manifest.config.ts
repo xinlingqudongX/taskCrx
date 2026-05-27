@@ -28,19 +28,13 @@ export default defineManifest({
     optional_permissions: [],
     host_permissions: [
         "<all_urls>",
-        "*://*/*",
-        "http://*/*",
-        "https://*/*",
-        "https://*/",
-        "http://*/",
-        "https://appstoreconnect.apple.com/*",
     ],
     background: {
-        service_worker: "background.ts",
+        service_worker: "background/index.ts",
         type: "module",
     },
     options_ui: {
-        page: "options/index.html",
+        page: "popup/index.html",
         open_in_tab: true,
     },
     action: {
@@ -56,9 +50,9 @@ export default defineManifest({
             resources: ["**/*", "*"],
         },
     ],
-    // content_security_policy: {
-    //     extension_pages: cspPolicy,
-    // },
+    content_security_policy: {
+        extension_pages: cspPolicy,
+    },
     // 添加Chrome同步支持
     storage: {
         managed_schema: "schema.json",

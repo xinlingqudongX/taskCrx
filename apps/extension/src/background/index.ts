@@ -8,9 +8,17 @@ import { cookieKeeper, CookieRefreshStrategy } from "./utils/cookie-keeper";
 import { networkMonitor } from "./services/NetworkMonitorService";
 import { bodyRewriter } from "./services/BodyRewriterService";
 import { protoDecoder } from "./services/ProtoDecoderService";
-import type { CollectedAppData, Task, TaskExecutionData } from "./types/index";
+import type { CollectedAppData, Task, TaskExecutionData } from "../types/index";
+import { WSMessageHandler } from "../websocket/message-handler";
+import type { WSConnectionConfig, WSConnectionStatus } from "../types/index";
 
 const USE_SYNC_STORAGE = true;
+
+// WebSocket 连接管理
+let wsHandler: WSMessageHandler | null = null;
+let wsConnectionConfig: WSConnectionConfig | null = null;
+
+const WS_CONFIG_KEY = "cc_ws_config_v1";
 
 // 修改存储相关函数以支持同步
 async function getTasks(): Promise<Task[]> {
@@ -67,10 +75,13 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
         const maxAppleApps = config.maxApps || 200;
 
         // 使用新的收集函数，根据参数有选择性地收集数据
+        const storedUserId = await new Promise<string>((res) =>
+            chrome.storage.local.get(["jiguangUserId"], (r) => res(r.jiguangUserId || ""))
+        );
         const apiResult = await collectAllAppData({
             includeJiguangData,
             includeAppleData,
-            userId: "783922",
+            userId: storedUserId || undefined,
             maxAppleApps,
         });
 
@@ -116,9 +127,6 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
             if (includeAppleData) {
                 const appleData: any = {};
 
-                if (apiResult.data.appleAppList) {
-                    appleData.appList = apiResult.data.appleAppList;
-                }
                 if (apiResult.data.appleAppList) {
                     appleData.appList = apiResult.data.appleAppList;
                 }
@@ -168,7 +176,7 @@ const DOMAINS_KEY = "cc_domains_v2";
 // Simple cron -> next-time helper: supports '0 */N * * *' (every N hours) & '*/M * * * *' minutes.
 function computeNextFromCron(cron: string, from = new Date()): number {
     if (!cron) return Date.now() + 60 * 60 * 1000;
-    const m = cron.match(/^0\s*\*\/\*(\d+)\s*\*\s*\*\s*\*$/);
+    const m = cron.match(/^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/);
     if (m) {
         const n = parseInt(m[1], 10);
         const next = new Date(from);
@@ -568,6 +576,86 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true });
         return true;
     }
+
+    // WebSocket 连接管理
+    if (msg?.type === "wsConnect") {
+        const config = msg.config as WSConnectionConfig;
+        try {
+            if (wsHandler) {
+                wsHandler.destroy();
+            }
+            wsHandler = new WSMessageHandler({
+                serverUrl: config.serverUrl,
+                token: msg.token,
+                userId: config.userId,
+                roomId: config.roomId,
+                userName: config.userName,
+                autoApplyCookies: config.autoApplyCookies ?? true,
+            });
+            wsHandler.connect();
+            wsConnectionConfig = config;
+
+            // 保存配置
+            chrome.storage.local.set({ [WS_CONFIG_KEY]: config });
+
+            sendResponse({ ok: true });
+        } catch (error: any) {
+            sendResponse({ ok: false, error: error.message });
+        }
+        return true;
+    }
+
+    if (msg?.type === "wsDisconnect") {
+        if (wsHandler) {
+            wsHandler.destroy();
+            wsHandler = null;
+        }
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    if (msg?.type === "wsShareCookies") {
+        if (!wsHandler) {
+            sendResponse({ ok: false, error: "WebSocket 未连接" });
+            return true;
+        }
+        wsHandler.shareDomainCookies(msg.domain).then(() => {
+            sendResponse({ ok: true });
+        }).catch((error: any) => {
+            sendResponse({ ok: false, error: error.message });
+        });
+        return true;
+    }
+
+    if (msg?.type === "wsRequestCookies") {
+        if (!wsHandler) {
+            sendResponse({ ok: false, error: "WebSocket 未连接" });
+            return true;
+        }
+        wsHandler.requestDomainCookies(msg.domain, msg.targetUserId);
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    if (msg?.type === "wsGetStatus") {
+        const status: WSConnectionStatus = {
+            connected: wsHandler?.isConnected ?? false,
+            roomId: wsConnectionConfig?.roomId ?? null,
+            userId: wsConnectionConfig?.userId ?? null,
+            onlineUsers: wsHandler?.getOnlineUsers().length ?? 0,
+        };
+        sendResponse(status);
+        return true;
+    }
+
+    if (msg?.type === "wsGetOnlineUsers") {
+        if (!wsHandler) {
+            sendResponse({ users: [] });
+            return true;
+        }
+        sendResponse({ users: wsHandler.getOnlineUsers() });
+        return true;
+    }
 });
 
 // alarm handler
@@ -577,10 +665,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     await runTask(taskId);
 });
 
-// on startup, re-create alarms from saved tasks (alarms may not persist reliably)
+// on startup: restore alarms and start services
 chrome.runtime.onStartup.addListener(async () => {
     const tasks = await getTasks();
     for (const t of tasks) scheduleNext(t);
+    cookieKeeper.start();
+    console.log('Cookie保活服务已启动');
 });
 
 // on installed: schedule existing tasks
@@ -588,16 +678,8 @@ chrome.runtime.onInstalled.addListener(async () => {
     const tasks = await getTasks();
     for (const t of tasks) scheduleNext(t);
 
-    // 启动cookie保活服务
     cookieKeeper.start();
     console.log('Cookie保活服务已启动');
-});
-
-// on startup: restart cookie keeper
-chrome.runtime.onStartup.addListener(async () => {
-    // 启动cookie保活服务
-    cookieKeeper.start();
-    console.log('Cookie保活服务已重启');
 });
 
 // 点击插件图标时打开 options 页面

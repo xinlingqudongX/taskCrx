@@ -26,7 +26,8 @@ export class BodyRewriterService {
 
     matchesUrl(rule: BodyRewriteRule, url: string): boolean {
         try {
-            const pattern = rule.urlPattern.replace(/\*/g, ".*");
+            const escaped = rule.urlPattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+            const pattern = escaped.replace(/\*/g, ".*");
             return new RegExp(`^${pattern}$`).test(url);
         } catch {
             return url.includes(rule.urlPattern);

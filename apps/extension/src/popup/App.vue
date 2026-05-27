@@ -104,6 +104,64 @@
             </n-space>
         </n-card>
 
+        <!-- WebSocket Cookie共享 -->
+        <n-card title="WebSocket Cookie共享">
+            <n-space vertical>
+                <n-space align="center">
+                    <n-tag :type="wsStatus.connected ? 'success' : 'default'">
+                        连接状态: {{ wsStatus.connected ? '已连接' : '未连接' }}
+                    </n-tag>
+                    <n-tag v-if="wsStatus.connected" type="info">
+                        在线用户: {{ wsStatus.onlineUsers }}
+                    </n-tag>
+                </n-space>
+                <n-space align="center">
+                    <n-input
+                        v-model:value="wsConfig.serverUrl"
+                        placeholder="服务器地址，如 wss://your-worker.workers.dev"
+                        style="width: 300px;"
+                    />
+                    <n-input
+                        v-model:value="wsConfig.roomId"
+                        placeholder="房间ID"
+                        style="width: 150px;"
+                    />
+                    <n-input
+                        v-model:value="wsConfig.userId"
+                        placeholder="用户ID"
+                        style="width: 150px;"
+                    />
+                </n-space>
+                <n-space align="center">
+                    <n-button
+                        @click="wsConnect"
+                        type="primary"
+                        size="small"
+                        :loading="wsLoading"
+                        :disabled="wsStatus.connected"
+                    >
+                        连接
+                    </n-button>
+                    <n-button
+                        @click="wsDisconnect"
+                        type="error"
+                        size="small"
+                        :disabled="!wsStatus.connected"
+                    >
+                        断开
+                    </n-button>
+                    <n-button
+                        @click="openShareModal"
+                        type="success"
+                        size="small"
+                        :disabled="!wsStatus.connected"
+                    >
+                        共享Cookie
+                    </n-button>
+                </n-space>
+            </n-space>
+        </n-card>
+
         <!-- 任务区域 -->
         <n-card title="任务列表">
             <task-list />
@@ -446,6 +504,15 @@ const interceptedRequests = ref([]);
 const detailModalVisible = ref(false);
 const detailData = ref(null);
 const protoDecodeResult = ref(null);
+
+// WebSocket 连接相关
+const wsLoading = ref(false);
+const wsConfig = reactive({
+    serverUrl: '',
+    roomId: '',
+    userId: '',
+});
+const wsStatus = ref({ connected: false, roomId: null, userId: null, onlineUsers: 0 });
 
 const formValue = reactive({
     domain: "",
@@ -842,6 +909,64 @@ const smartRefresh = async () => {
 
 // 页面加载时检查Cookie状态
 checkCookieStatus();
+
+// WebSocket 连接相关方法
+const wsConnect = async () => {
+    if (!wsConfig.serverUrl || !wsConfig.roomId || !wsConfig.userId) {
+        alert('请填写完整的连接信息');
+        return;
+    }
+    wsLoading.value = true;
+    try {
+        const token = btoa(`${wsConfig.userId}:${Date.now()}:simple`);
+        const result = await chrome.runtime.sendMessage({
+            type: 'wsConnect',
+            config: wsConfig,
+            token,
+        });
+        if (result?.ok) {
+            await refreshWsStatus();
+        } else {
+            alert('连接失败: ' + (result?.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('连接失败: ' + error.message);
+    } finally {
+        wsLoading.value = false;
+    }
+};
+
+const wsDisconnect = async () => {
+    await chrome.runtime.sendMessage({ type: 'wsDisconnect' });
+    wsStatus.value = { connected: false, roomId: null, userId: null, onlineUsers: 0 };
+};
+
+const refreshWsStatus = async () => {
+    try {
+        const status = await chrome.runtime.sendMessage({ type: 'wsGetStatus' });
+        wsStatus.value = status;
+    } catch {
+        wsStatus.value = { connected: false, roomId: null, userId: null, onlineUsers: 0 };
+    }
+};
+
+const openShareModal = async () => {
+    const domain = prompt('请输入要共享Cookie的域名:');
+    if (domain) {
+        const result = await chrome.runtime.sendMessage({
+            type: 'wsShareCookies',
+            domain,
+        });
+        if (result?.ok) {
+            alert(`已共享 ${domain} 的 Cookie`);
+        } else {
+            alert('共享失败: ' + (result?.error || '未知错误'));
+        }
+    }
+};
+
+// 页面加载时检查 WebSocket 状态
+refreshWsStatus();
 
 // 网络监控相关方法
 const openNetworkMonitorModal = async () => {

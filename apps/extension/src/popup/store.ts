@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import type { Task as BackgroundTask, AppDataConfig } from "../types/index";
+import type { Task as BackgroundTask, AppDataConfig } from "../../types/index";
 
 // 定义前端任务接口（继承后端类型并添加前端特有字段）
 interface Task extends Omit<BackgroundTask, "targetUrl" | "lastRun"> {

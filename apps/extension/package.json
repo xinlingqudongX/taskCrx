@@ -1,0 +1,31 @@
+{
+    "name": "@team-session/extension",
+    "version": "1.0.2",
+    "private": true,
+    "description": "Share the session with other users in the same team.",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@team-session/shared": "workspace:*",
+        "@types/chrome": "^0.1.3",
+        "@types/node": "^24.2.1",
+        "@vicons/ionicons5": "^0.13.0",
+        "jsqr": "^1.4.0",
+        "pako": "^2.1.0",
+        "protobufjs": "^8.4.2",
+        "qrcode": "^1.5.3"
+    },
+    "devDependencies": {
+        "@crxjs/vite-plugin": "^2.1.0",
+        "@vitejs/plugin-vue": "^6.0.1",
+        "jsdom": "^27.4.0",
+        "naive-ui": "^2.42.0",
+        "typescript": "^5.9.2",
+        "vite": "^7.1.1",
+        "vite-plugin-zip-pack": "^1.2.4",
+        "vue": "^3.5.18"
+    }
+}

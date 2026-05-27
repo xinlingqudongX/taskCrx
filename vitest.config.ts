@@ -9,10 +9,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
+    include: [
+      'apps/**/*.test.ts',
+      'packages/**/*.test.ts',
+    ],
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      '@team-session/shared': resolve(__dirname, './packages/shared/src'),
     },
   },
 });

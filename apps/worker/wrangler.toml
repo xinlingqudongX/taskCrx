@@ -1,0 +1,16 @@
+name = "team-session-relay"
+main = "src/index.ts"
+compatibility_date = "2024-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "RELAY_ROOM"
+class_name = "RelayRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RelayRoom"]
+
+[vars]
+# AUTH_SECRET 必须通过 wrangler secret put 设置，不要写在配置文件中
+# 运行: wrangler secret put AUTH_SECRET

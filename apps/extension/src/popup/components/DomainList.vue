@@ -183,8 +183,8 @@ import {
     CheckmarkCircleOutline 
 } from "@vicons/ionicons5";
 import { domainStore } from "../store";
-import { cookieSharingService } from "../../services/CookieSharingService";
-import { cookieFileExporter } from "../../services/CookieFileExporter";
+import { cookieSharingService } from "../../background/services/CookieSharingService";
+import { cookieFileExporter } from "../../background/services/CookieFileExporter";
 
 // 状态管理
 const shareDialogVisible = ref(false);

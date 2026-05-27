@@ -9,7 +9,9 @@ export class NetworkMonitorService {
     private isListening = false;
     private requestCallbacks: RequestCallback[] = [];
     private responseCallbacks: ResponseCallback[] = [];
-    private pendingRequests: Map<string, { url: string; method: string; headers: Record<string, string>; body: string | null }> = new Map();
+    private pendingRequests: Map<string, { url: string; method: string; headers: Record<string, string>; body: string | null; timestamp: number }> = new Map();
+    private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+    private static readonly PENDING_TTL = 30_000; // 30s
 
     constructor(config?: Partial<NetworkMonitorConfig>) {
         this.config = {
@@ -63,6 +65,7 @@ export class NetworkMonitorService {
 
             this.isListening = true;
             this.config.enabled = true;
+            this.startCleanupTimer();
             console.log("网络监控已启动");
             return true;
         } catch (error) {
@@ -82,6 +85,7 @@ export class NetworkMonitorService {
         chrome.debugger.onEvent.removeListener(this.handleDebuggerEvent);
         this.isListening = false;
         this.config.enabled = false;
+        this.stopCleanupTimer();
         this.pendingRequests.clear();
         console.log("网络监控已停止");
     }
@@ -139,6 +143,7 @@ export class NetworkMonitorService {
             method: request.method,
             headers,
             body: request.postData || null,
+            timestamp: Date.now(),
         });
 
         for (const cb of this.requestCallbacks) {
@@ -170,6 +175,7 @@ export class NetworkMonitorService {
                     }
 
                     const cached = this.pendingRequests.get(requestId);
+                    this.pendingRequests.delete(requestId);
                     const intercepted: InterceptedResponse = {
                         requestId,
                         url: cached?.url || response.url,
@@ -190,6 +196,7 @@ export class NetworkMonitorService {
                 });
         } else {
             const cached = this.pendingRequests.get(requestId);
+            this.pendingRequests.delete(requestId);
             const intercepted: InterceptedResponse = {
                 requestId,
                 url: cached?.url || response.url,
@@ -235,6 +242,25 @@ export class NetworkMonitorService {
             bytes[i] = binary.charCodeAt(i);
         }
         return bytes.buffer;
+    }
+
+    private startCleanupTimer(): void {
+        this.stopCleanupTimer();
+        this.cleanupTimer = setInterval(() => {
+            const now = Date.now();
+            for (const [id, entry] of this.pendingRequests) {
+                if (now - entry.timestamp > NetworkMonitorService.PENDING_TTL) {
+                    this.pendingRequests.delete(id);
+                }
+            }
+        }, NetworkMonitorService.PENDING_TTL);
+    }
+
+    private stopCleanupTimer(): void {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+            this.cleanupTimer = null;
+        }
     }
 
     updateConfig(updates: Partial<NetworkMonitorConfig>): void {
