@@ -45,6 +45,8 @@ export interface AppDataConfig {
     collectJiguangData?: boolean;
     /** 是否收集苹果数据信息（包含应用列表和团队信息） */
     collectAppleData?: boolean;
+    /** 是否收集ChatGPT数据信息（包含会话列表和用户信息） */
+    collectChatGPTData?: boolean;
     /** 最大应用数量限制 */
     maxApps?: number;
 }
@@ -226,6 +228,8 @@ export interface CollectedAppData {
     jiguangData?: JiguangData;
     /** 苹果开发者数据 */
     appleData?: AppleData;
+    /** ChatGPT数据 */
+    chatgptData?: ChatGPTData;
     /** 收集时间戳 */
     collectTime: number;
 }
@@ -501,4 +505,101 @@ export interface CookieSharingService {
      * @returns Promise<void>
      */
     setCookies(domain: string, cookies: FullCookie[]): Promise<void>;
+}
+
+// ==================== ChatGPT 数据收集类型 ====================
+
+/**
+ * ChatGPT会话信息
+ */
+export interface ChatGPTConversation {
+    id: string;
+    title: string;
+    createTime: string;
+    updateTime: string;
+    model?: string;
+}
+
+/**
+ * ChatGPT用户信息
+ */
+export interface ChatGPTUserInfo {
+    id: string;
+    name: string;
+    email: string;
+    imageUrl?: string;
+}
+
+/**
+ * ChatGPT收集数据
+ */
+export interface ChatGPTData {
+    userInfo?: ChatGPTUserInfo;
+    conversations?: ChatGPTConversation[];
+    collectTime: number;
+}
+
+// ==================== 网络监控类型 ====================
+
+/**
+ * 拦截到的网络请求
+ */
+export interface InterceptedRequest {
+    requestId: string;
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body: string | null;
+    timestamp: number;
+    type: 'request';
+}
+
+/**
+ * 拦截到的网络响应
+ */
+export interface InterceptedResponse {
+    requestId: string;
+    url: string;
+    statusCode: number;
+    headers: Record<string, string>;
+    body: string | null;
+    bodyRaw: ArrayBuffer | null;
+    timestamp: number;
+    type: 'response';
+}
+
+/**
+ * Proto解码结果
+ */
+export interface DecodedProto {
+    requestId: string;
+    messageType: string;
+    decoded: Record<string, any>;
+    raw: Uint8Array;
+}
+
+/**
+ * Body重写规则
+ */
+export interface BodyRewriteRule {
+    id: string;
+    name: string;
+    urlPattern: string;
+    enabled: boolean;
+    target: 'request' | 'response';
+    matchType: 'json' | 'text' | 'regex';
+    matchPattern: string;
+    replaceWith: string;
+}
+
+/**
+ * 网络监控配置
+ */
+export interface NetworkMonitorConfig {
+    enabled: boolean;
+    targetUrls: string[];
+    captureRequestBodies: boolean;
+    captureResponseBodies: boolean;
+    protoDecode: boolean;
+    maxBufferSize: number;
 }
