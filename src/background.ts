@@ -3,7 +3,11 @@ import {
     collectAllAppData,
     getJiguangTokenFromCookie,
 } from "./utils/app-collector";
+import { collectChatGPTData } from "./utils/chatgpt-collector";
 import { cookieKeeper, CookieRefreshStrategy } from "./utils/cookie-keeper";
+import { networkMonitor } from "./services/NetworkMonitorService";
+import { bodyRewriter } from "./services/BodyRewriterService";
+import { protoDecoder } from "./services/ProtoDecoderService";
 import type { CollectedAppData, Task, TaskExecutionData } from "./types/index";
 
 const USE_SYNC_STORAGE = true;
@@ -134,6 +138,17 @@ async function collectAppData(task: Task): Promise<CollectedAppData | null> {
                         appleData.actorList?.length || 0
                     } 个 Actor`
                 );
+            }
+
+            // 收集ChatGPT数据
+            if (config.collectChatGPTData) {
+                const chatgptResult = await collectChatGPTData(config.maxApps || 50);
+                if (chatgptResult.success && chatgptResult.data) {
+                    collectedData.chatgptData = chatgptResult.data;
+                    console.log("成功收集ChatGPT数据");
+                } else {
+                    console.warn("ChatGPT数据收集失败:", chatgptResult.error);
+                }
             }
 
             return collectedData;
@@ -459,6 +474,97 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg?.type === "updateCookieKeeperConfig") {
         cookieKeeper.updateConfig(msg.config);
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    // ChatGPT数据收集
+    if (msg?.type === "collectChatGPTData") {
+        collectChatGPTData(msg.maxConversations || 50).then((result) => {
+            sendResponse(result);
+        });
+        return true;
+    }
+
+    // 网络监控相关
+    if (msg?.type === "attachNetworkMonitor") {
+        chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+            if (tabs[0]?.id) {
+                const ok = await networkMonitor.attach(tabs[0].id);
+                sendResponse({ ok, tabId: tabs[0].id });
+            } else {
+                sendResponse({ ok: false, error: "无活跃标签页" });
+            }
+        });
+        return true;
+    }
+
+    if (msg?.type === "startNetworkMonitor") {
+        networkMonitor.startListening().then((ok) => {
+            sendResponse({ ok });
+        });
+        return true;
+    }
+
+    if (msg?.type === "stopNetworkMonitor") {
+        networkMonitor.stopListening().then(() => {
+            sendResponse({ ok: true });
+        });
+        return true;
+    }
+
+    if (msg?.type === "detachNetworkMonitor") {
+        networkMonitor.detach().then(() => {
+            sendResponse({ ok: true });
+        });
+        return true;
+    }
+
+    if (msg?.type === "getNetworkMonitorStatus") {
+        sendResponse(networkMonitor.getStatus());
+        return true;
+    }
+
+    // Body重写规则管理
+    if (msg?.type === "getRewriteRules") {
+        sendResponse({ rules: bodyRewriter.getRules() });
+        return true;
+    }
+
+    if (msg?.type === "addRewriteRule") {
+        bodyRewriter.addRule(msg.rule);
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    if (msg?.type === "removeRewriteRule") {
+        bodyRewriter.removeRule(msg.ruleId);
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    if (msg?.type === "updateRewriteRule") {
+        bodyRewriter.updateRule(msg.ruleId, msg.updates);
+        sendResponse({ ok: true });
+        return true;
+    }
+
+    // Proto解码
+    if (msg?.type === "decodeProto") {
+        const data = new Uint8Array(msg.data);
+        const result = protoDecoder.decode(data, msg.rootName);
+        sendResponse({ result });
+        return true;
+    }
+
+    if (msg?.type === "encodeProto") {
+        const result = protoDecoder.encode(msg.obj, msg.rootName, msg.typeName);
+        sendResponse({ data: result ? Array.from(result) : null });
+        return true;
+    }
+
+    if (msg?.type === "loadProtoSource") {
+        protoDecoder.loadProtoSource(msg.name, msg.source);
         sendResponse({ ok: true });
         return true;
     }
