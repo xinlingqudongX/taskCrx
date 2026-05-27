@@ -236,6 +236,11 @@ const taskColumns = [
             if (config.collectAppleData) {
                 features.push("苹果数据");
             }
+
+            // 判断是否启用ChatGPT数据收集
+            if (config.collectChatGPTData) {
+                features.push("ChatGPT数据");
+            }
             
             // 如果没有启用任何数据收集
             if (features.length === 0) {

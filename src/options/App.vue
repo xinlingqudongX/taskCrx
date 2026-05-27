@@ -34,6 +34,12 @@
                     </template>
                     导入任务
                 </n-button>
+                <n-button @click="openNetworkMonitorModal" type="primary" ghost>
+                    <template #icon>
+                        <n-icon><AnalyticsOutline /></n-icon>
+                    </template>
+                    网络监控
+                </n-button>
                 <input
                     ref="fileInput"
                     type="file"
@@ -218,7 +224,17 @@
                         启用后将收集苹果开发者的应用列表和团队信息
                     </n-text>
                 </n-form-item>
-                
+
+                <n-form-item label="收集ChatGPT数据信息" path="collectChatGPTData">
+                    <n-switch v-model:value="taskFormValue.appDataConfig.collectChatGPTData">
+                        <template #checked>启用</template>
+                        <template #unchecked>禁用</template>
+                    </n-switch>
+                    <n-text depth="3" style="margin-left: 12px; font-size: 12px;">
+                        启用后将收集ChatGPT的会话列表和用户信息
+                    </n-text>
+                </n-form-item>
+
                 <n-form-item label="最大应用数量" path="maxApps">
                     <n-input-number
                         v-model:value="taskFormValue.appDataConfig.maxApps"
@@ -239,12 +255,139 @@
                 </n-space>
             </template>
         </n-modal>
+        <!-- 网络监控弹窗 -->
+        <n-modal
+            v-model:show="networkMonitorModalVisible"
+            preset="dialog"
+            title="网络请求监控"
+            style="width: 800px"
+        >
+            <n-space vertical>
+                <n-space align="center">
+                    <n-tag :type="networkMonitorStatus.attached ? 'success' : 'default'">
+                        状态: {{ networkMonitorStatus.attached ? '已连接' : '未连接' }}
+                    </n-tag>
+                    <n-tag :type="networkMonitorStatus.listening ? 'success' : 'default'">
+                        监听: {{ networkMonitorStatus.listening ? '进行中' : '已停止' }}
+                    </n-tag>
+                    <n-button
+                        @click="attachNetworkMonitor"
+                        size="small"
+                        type="primary"
+                        :loading="monitorLoading"
+                        :disabled="networkMonitorStatus.attached"
+                    >
+                        附加调试器
+                    </n-button>
+                    <n-button
+                        @click="startNetworkMonitor"
+                        size="small"
+                        type="info"
+                        :disabled="!networkMonitorStatus.attached || networkMonitorStatus.listening"
+                    >
+                        开始监听
+                    </n-button>
+                    <n-button
+                        @click="stopNetworkMonitor"
+                        size="small"
+                        type="warning"
+                        :disabled="!networkMonitorStatus.listening"
+                    >
+                        停止监听
+                    </n-button>
+                    <n-button
+                        @click="detachNetworkMonitor"
+                        size="small"
+                        type="error"
+                        :disabled="!networkMonitorStatus.attached"
+                    >
+                        断开连接
+                    </n-button>
+                </n-space>
+                <n-divider />
+                <n-text strong>拦截的请求/响应</n-text>
+                <n-data-table
+                    :columns="interceptedColumns"
+                    :data="interceptedRequests"
+                    :pagination="{ pageSize: 10 }"
+                    bordered
+                    striped
+                    size="small"
+                    style="max-height: 400px; overflow: auto;"
+                />
+            </n-space>
+            <template #action>
+                <n-space>
+                    <n-button @click="clearInterceptedRequests" type="warning" size="small">
+                        清空记录
+                    </n-button>
+                    <n-button @click="networkMonitorModalVisible = false">关闭</n-button>
+                </n-space>
+            </template>
+        </n-modal>
+
+        <!-- 请求/响应详情弹窗 -->
+        <n-modal
+            v-model:show="detailModalVisible"
+            preset="dialog"
+            :title="detailData?.type === 'request' ? '请求详情' : '响应详情'"
+            style="width: 700px"
+        >
+            <n-space vertical v-if="detailData">
+                <n-text strong>URL:</n-text>
+                <n-input
+                    :value="detailData.url"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 3 }"
+                    readonly
+                />
+                <n-text strong v-if="detailData.method">方法: {{ detailData.method }}</n-text>
+                <n-text strong v-if="detailData.statusCode">状态码: {{ detailData.statusCode }}</n-text>
+                <n-divider />
+                <n-text strong>请求头:</n-text>
+                <n-input
+                    :value="JSON.stringify(detailData.headers, null, 2)"
+                    type="textarea"
+                    :autosize="{ minRows: 2, maxRows: 6 }"
+                    readonly
+                />
+                <n-divider />
+                <n-text strong>Body:</n-text>
+                <n-input
+                    :value="detailData.body || '(无body)'"
+                    type="textarea"
+                    :autosize="{ minRows: 4, maxRows: 15 }"
+                    readonly
+                />
+                <n-divider />
+                <n-text strong>Proto解码:</n-text>
+                <n-space align="center">
+                    <n-button @click="decodeProtoBody(detailData)" size="small" type="primary">
+                        尝试解码Proto
+                    </n-button>
+                    <n-text v-if="protoDecodeResult" depth="3">
+                        类型: {{ protoDecodeResult.typeName }}
+                    </n-text>
+                </n-space>
+                <n-input
+                    v-if="protoDecodeResult"
+                    :value="JSON.stringify(protoDecodeResult.message, null, 2)"
+                    type="textarea"
+                    :autosize="{ minRows: 3, maxRows: 12 }"
+                    readonly
+                />
+            </n-space>
+            <template #action>
+                <n-button @click="detailModalVisible = false">关闭</n-button>
+            </template>
+        </n-modal>
+
         </n-space>
     </n-message-provider>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from "vue";
+import { ref, reactive, computed, h } from "vue";
 import {
     NButton,
     NCard,
@@ -265,12 +408,14 @@ import {
     NDivider,
     NText,
     NMessageProvider,
+    NDataTable,
 } from "naive-ui";
 import {
     InformationCircleOutline,
     AddOutline,
     CloudDownloadOutline,
     CloudUploadOutline,
+    AnalyticsOutline,
 } from "@vicons/ionicons5";
 import DomainList from "./components/DomainList.vue";
 import TaskList from "./components/TaskList.vue";
@@ -293,6 +438,15 @@ const cookieStatusLoading = ref(false);
 const keepAliveLoading = ref(false);
 const refreshLoading = ref(false);
 
+// 网络监控相关
+const networkMonitorModalVisible = ref(false);
+const monitorLoading = ref(false);
+const networkMonitorStatus = ref({ attached: false, listening: false });
+const interceptedRequests = ref([]);
+const detailModalVisible = ref(false);
+const detailData = ref(null);
+const protoDecodeResult = ref(null);
+
 const formValue = reactive({
     domain: "",
 });
@@ -307,6 +461,7 @@ const taskFormValue = reactive({
     appDataConfig: {
         collectJiguangData: false,
         collectAppleData: false,
+        collectChatGPTData: false,
         maxApps: 50,
     },
 });
@@ -423,6 +578,7 @@ const openAddTaskModal = () => {
     taskFormValue.appDataConfig = {
         collectJiguangData: false,
         collectAppleData: false,
+        collectChatGPTData: false,
         maxApps: 50,
     };
     taskModalVisible.value = true;
@@ -442,6 +598,7 @@ const openEditTaskModal = (task) => {
     taskFormValue.appDataConfig = task.appDataConfig || {
         collectJiguangData: false,
         collectAppleData: false,
+        collectChatGPTData: false,
         maxApps: 50,
     };
     taskModalVisible.value = true;
@@ -685,4 +842,94 @@ const smartRefresh = async () => {
 
 // 页面加载时检查Cookie状态
 checkCookieStatus();
+
+// 网络监控相关方法
+const openNetworkMonitorModal = async () => {
+    networkMonitorModalVisible.value = true;
+    await refreshNetworkMonitorStatus();
+};
+
+const refreshNetworkMonitorStatus = async () => {
+    try {
+        const status = await chrome.runtime.sendMessage({ type: "getNetworkMonitorStatus" });
+        networkMonitorStatus.value = {
+            attached: status.attachedTabId !== null,
+            listening: status.isListening,
+        };
+    } catch {
+        networkMonitorStatus.value = { attached: false, listening: false };
+    }
+};
+
+const attachNetworkMonitor = async () => {
+    monitorLoading.value = true;
+    try {
+        const result = await chrome.runtime.sendMessage({ type: "attachNetworkMonitor" });
+        if (result?.ok) {
+            networkMonitorStatus.value.attached = true;
+        } else {
+            alert("附加调试器失败: " + (result?.error || "未知错误"));
+        }
+    } catch (error) {
+        alert("附加调试器失败: " + error.message);
+    } finally {
+        monitorLoading.value = false;
+    }
+};
+
+const startNetworkMonitor = async () => {
+    const result = await chrome.runtime.sendMessage({ type: "startNetworkMonitor" });
+    if (result?.ok) {
+        networkMonitorStatus.value.listening = true;
+    } else {
+        alert("启动监听失败");
+    }
+};
+
+const stopNetworkMonitor = async () => {
+    await chrome.runtime.sendMessage({ type: "stopNetworkMonitor" });
+    networkMonitorStatus.value.listening = false;
+};
+
+const detachNetworkMonitor = async () => {
+    await chrome.runtime.sendMessage({ type: "detachNetworkMonitor" });
+    networkMonitorStatus.value = { attached: false, listening: false };
+};
+
+const clearInterceptedRequests = () => {
+    interceptedRequests.value = [];
+};
+
+const showDetail = (record) => {
+    detailData.value = record;
+    protoDecodeResult.value = null;
+    detailModalVisible.value = true;
+};
+
+const decodeProtoBody = async (record) => {
+    if (!record.body) {
+        alert("没有可解码的body数据");
+        return;
+    }
+    try {
+        const encoder = new TextEncoder();
+        const data = Array.from(encoder.encode(record.body));
+        const result = await chrome.runtime.sendMessage({ type: "decodeProto", data });
+        if (result?.result) {
+            protoDecodeResult.value = result.result;
+        } else {
+            protoDecodeResult.value = { typeName: "解码失败", message: null };
+        }
+    } catch (error) {
+        alert("Proto解码失败: " + error.message);
+    }
+};
+
+const interceptedColumns = [
+    { title: "类型", key: "type", width: 70, render: (row) => h(NTag, { type: row.type === "request" ? "info" : "success", size: "small" }, { default: () => row.type === "request" ? "请求" : "响应" }) },
+    { title: "URL", key: "url", render: (row) => h("div", { style: "max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;", title: row.url }, row.url) },
+    { title: "方法", key: "method", width: 70, render: (row) => row.method || "-" },
+    { title: "状态", key: "statusCode", width: 70, render: (row) => row.statusCode || "-" },
+    { title: "操作", key: "actions", width: 80, render: (row) => h(NButton, { size: "small", type: "primary", tertiary: true, onClick: () => showDetail(row) }, { default: () => "详情" }) },
+];
 </script>
