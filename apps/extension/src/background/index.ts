@@ -581,6 +581,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === "wsConnect") {
         const config = msg.config as WSConnectionConfig;
         try {
+            // 单例检查：如果已有活跃连接，直接返回成功
+            if (wsHandler?.isConnected) {
+                sendResponse({ ok: true, reused: true });
+                return true;
+            }
+
             if (wsHandler) {
                 wsHandler.destroy();
             }
@@ -602,6 +608,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true;
     }
 
+    if (msg?.type === "wsGetConfig") {
+        chrome.storage.local.get([WS_CONFIG_KEY], (result) => {
+            sendResponse(result[WS_CONFIG_KEY] || null);
+        });
+        return true;
+    }
+
     if (msg?.type === "wsDisconnect") {
         if (wsHandler) {
             wsHandler.destroy();
@@ -616,11 +629,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({ ok: false, error: "WebSocket 未连接" });
             return true;
         }
-        wsHandler.shareDomainCookies(msg.domain).then(() => {
-            sendResponse({ ok: true });
-        }).catch((error: any) => {
-            sendResponse({ ok: false, error: error.message });
+        // 支持多域名共享
+        const domains: string[] = msg.domains || (msg.domain ? [msg.domain] : []);
+        Promise.all(domains.map((d: string) => wsHandler!.shareDomainCookies(d)))
+            .then(() => sendResponse({ ok: true }))
+            .catch((error: any) => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+
+    // 获取待确认的共享 Cookie
+    if (msg?.type === "wsGetPendingCookies") {
+        chrome.storage.local.get(["pending_shared_cookies"], (result) => {
+            sendResponse(result["pending_shared_cookies"] || []);
         });
+        return true;
+    }
+
+    // 用户确认应用共享的 Cookie
+    if (msg?.type === "wsApplyPendingCookies") {
+        if (!wsHandler) {
+            sendResponse({ ok: false, error: "WebSocket 未连接" });
+            return true;
+        }
+        const pending = msg.cookies as { domain: string; cookies: any[] }[];
+        Promise.all(pending.map((p) => wsHandler!.applySharedCookies(p.domain, p.cookies)))
+            .then(() => {
+                chrome.storage.local.remove("pending_shared_cookies");
+                chrome.action.setBadgeText({ text: "" });
+                sendResponse({ ok: true });
+            })
+            .catch((error: any) => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+
+    // 用户拒绝共享的 Cookie
+    if (msg?.type === "wsRejectPendingCookies") {
+        chrome.storage.local.remove("pending_shared_cookies");
+        chrome.action.setBadgeText({ text: "" });
+        sendResponse({ ok: true });
         return true;
     }
 

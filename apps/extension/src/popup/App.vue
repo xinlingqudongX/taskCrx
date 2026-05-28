@@ -160,6 +160,21 @@
             </n-space>
         </n-card>
 
+        <!-- 待确认的共享 Cookie -->
+        <n-card v-if="pendingCookies.length > 0" size="small" title="收到共享Cookie" style="margin-top: 12px;">
+            <n-space vertical size="small">
+                <n-alert v-for="(item, index) in pendingCookies" :key="index" type="info" style="margin-bottom: 8px;">
+                    <template #header>
+                        {{ item.fromUserId || '未知用户' }} 共享了 {{ item.domain }} 的 {{ item.cookies.length }} 个 Cookie
+                    </template>
+                    <n-space>
+                        <n-button size="tiny" type="success" @click="approvePendingCookies(index)">应用</n-button>
+                        <n-button size="tiny" type="error" @click="rejectPendingCookies(index)">拒绝</n-button>
+                    </n-space>
+                </n-alert>
+            </n-space>
+        </n-card>
+
         <!-- 共享Cookie域名选择弹窗 -->
         <n-modal
             v-model:show="shareModalVisible"
@@ -173,6 +188,7 @@
                         :options="domainOptions"
                         placeholder="请选择要共享Cookie的域名"
                         filterable
+                        multiple
                     />
                 </n-form-item>
             </n-form>
@@ -537,8 +553,48 @@ const wsConfig = reactive({
 });
 const wsStatus = ref({ connected: false, roomId: null, userId: null, userName: null, onlineUsers: 0 });
 const shareModalVisible = ref(false);
-const shareDomain = ref(null);
+const shareDomain = ref([]);
 const shareLoading = ref(false);
+const pendingCookies: any = ref([]);
+
+// 加载待确认的共享 Cookie
+const loadPendingCookies = async () => {
+    try {
+        const result = await chrome.runtime.sendMessage({ type: 'wsGetPendingCookies' });
+        pendingCookies.value = result || [];
+    } catch { pendingCookies.value = []; }
+};
+loadPendingCookies();
+
+const approvePendingCookies = async (index: number) => {
+    const item = pendingCookies.value[index];
+    if (!item) return;
+    try {
+        const result = await chrome.runtime.sendMessage({
+            type: 'wsApplyPendingCookies',
+            cookies: [{ domain: item.domain, cookies: item.cookies }],
+        });
+        if (result?.ok) {
+            pendingCookies.value.splice(index, 1);
+            alert(`已应用 ${item.domain} 的 ${item.cookies.length} 个 Cookie`);
+        } else {
+            alert('应用失败: ' + (result?.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('应用失败: ' + error.message);
+    }
+};
+
+const rejectPendingCookies = async (index: number) => {
+    pendingCookies.value.splice(index, 1);
+    // 更新 storage
+    await chrome.runtime.sendMessage({ type: 'wsRejectPendingCookies' });
+    // 如果还有其他待确认项，重新写入
+    if (pendingCookies.value.length > 0) {
+        chrome.storage.local.set({ pending_shared_cookies: pendingCookies.value });
+        chrome.action.setBadgeText({ text: String(pendingCookies.value.length) });
+    }
+};
 
 const formValue = reactive({
     domain: "",
@@ -567,10 +623,11 @@ const rules = {
             if (!value) {
                 return new Error("请输入域名");
             }
-            // 简单的域名验证
             const domainRegex = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-            if (!domainRegex.test(value)) {
-                return new Error("请输入有效的域名格式");
+            const ipPortRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/;
+            const localhostRegex = /^localhost(:\d{1,5})?$/;
+            if (!domainRegex.test(value) && !ipPortRegex.test(value) && !localhostRegex.test(value)) {
+                return new Error("请输入有效的域名、IP:端口 或 localhost:端口");
             }
             return true;
         },
@@ -949,11 +1006,16 @@ const wsConnect = async () => {
             config: wsConfig,
         });
         if (result?.ok) {
-            // WebSocket 连接是异步的，轮询等待连接就绪
-            for (let i = 0; i < 10; i++) {
-                await new Promise(r => setTimeout(r, 500));
+            if (result.reused) {
+                // 已有活跃连接，直接刷新状态
                 await refreshWsStatus();
-                if (wsStatus.value.connected) break;
+            } else {
+                // WebSocket 连接是异步的，轮询等待连接就绪
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 500));
+                    await refreshWsStatus();
+                    if (wsStatus.value.connected) break;
+                }
             }
         } else {
             alert('连接失败: ' + (result?.error || '未知错误'));
@@ -980,12 +1042,12 @@ const refreshWsStatus = async () => {
 };
 
 const openShareModal = () => {
-    shareDomain.value = null;
+    shareDomain.value = [];
     shareModalVisible.value = true;
 };
 
 const confirmShareCookies = async () => {
-    if (!shareDomain.value) {
+    if (!shareDomain.value || shareDomain.value.length === 0) {
         alert('请选择要共享Cookie的域名');
         return;
     }
@@ -993,11 +1055,11 @@ const confirmShareCookies = async () => {
     try {
         const result = await chrome.runtime.sendMessage({
             type: 'wsShareCookies',
-            domain: shareDomain.value,
+            domains: shareDomain.value,
         });
         if (result?.ok) {
             shareModalVisible.value = false;
-            alert(`已共享 ${shareDomain.value} 的 Cookie`);
+            alert(`已共享 ${shareDomain.value.length} 个域名的 Cookie`);
         } else {
             alert('共享失败: ' + (result?.error || '未知错误'));
         }
@@ -1008,7 +1070,16 @@ const confirmShareCookies = async () => {
     }
 };
 
-// 页面加载时检查 WebSocket 状态
+// 页面加载时检查 WebSocket 状态，并恢复已保存的配置
+const loadWsConfig = async () => {
+    try {
+        const saved = await chrome.runtime.sendMessage({ type: 'wsGetConfig' });
+        if (saved?.serverUrl) wsConfig.serverUrl = saved.serverUrl;
+        if (saved?.roomId) wsConfig.roomId = saved.roomId;
+    } catch {}
+};
+
+loadWsConfig();
 refreshWsStatus();
 
 // 网络监控相关方法

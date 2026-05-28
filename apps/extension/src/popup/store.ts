@@ -105,14 +105,17 @@ class DomainStore {
     async addDomain(domain: string) {
         if (!this.state.domains.includes(domain)) {
             try {
-                // 直接在options页面请求权限
-                const granted = await chrome.permissions.request({
-                    origins: [`*://*.${domain}/*`],
-                });
-
-                if (!granted) {
-                    console.log(`用户拒绝了对域名 ${domain} 的权限请求`);
-                    return false;
+                // IP:端口 和 localhost 不支持 Chrome match pattern 中的端口语法，
+                // 跳过权限请求（manifest 已有 <all_urls> 权限）
+                const isIpOrLocalhost = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(domain) || /^localhost/.test(domain);
+                if (!isIpOrLocalhost) {
+                    const granted = await chrome.permissions.request({
+                        origins: [`*://*.${domain}/*`],
+                    });
+                    if (!granted) {
+                        console.log(`用户拒绝了对域名 ${domain} 的权限请求`);
+                        return false;
+                    }
                 }
 
                 // 权限获取成功后保存域名到background

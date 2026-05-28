@@ -85,6 +85,13 @@ export class WSMessageHandler {
     }
 
     /**
+     * 应用待确认的共享 Cookie（由用户确认后调用）
+     */
+    async applySharedCookies(domain: string, cookies: CookieData[]): Promise<void> {
+        await this.applyCookies(domain, cookies);
+    }
+
+    /**
      * 获取在线用户
      */
     getOnlineUsers(): UserInfo[] {
@@ -140,9 +147,16 @@ export class WSMessageHandler {
         this.client.on('cookie-received', (data) => {
             const payload = data as { domain: string; cookies: CookieData[]; fromUserId?: string };
             console.log(`[CookieShare] 收到 ${payload?.fromUserId || 'unknown'} 共享的 ${payload?.domain} Cookie: ${payload?.cookies?.length || 0} 个`);
-            if (payload?.cookies && this.config.autoApplyCookies !== false) {
-                this.applyCookies(payload.domain, payload.cookies);
-            }
+            if (!payload?.cookies || payload.cookies.length === 0) return;
+
+            // 存为待确认，由用户决定是否应用
+            chrome.storage.local.get(["pending_shared_cookies"], (result) => {
+                const pending = (result["pending_shared_cookies"] || []) as any[];
+                pending.push({ domain: payload.domain, cookies: payload.cookies, fromUserId: payload.fromUserId, receivedAt: Date.now() });
+                chrome.storage.local.set({ "pending_shared_cookies": pending });
+                chrome.action.setBadgeText({ text: String(pending.length) });
+                chrome.action.setBadgeBackgroundColor({ color: '#f5a623' });
+            });
         });
 
         this.client.on('cookie-ack', (data) => {
@@ -231,7 +245,9 @@ export class WSMessageHandler {
      * 从浏览器收集 Cookie
      */
     private async collectCookies(domain: string): Promise<CookieData[]> {
-        const cookies = await chrome.cookies.getAll({ domain });
+        // chrome.cookies.getAll 不支持 host:port，去掉端口
+        const hostname = domain.replace(/:\d+$/, '');
+        const cookies = await chrome.cookies.getAll({ domain: hostname });
         return cookies.map((c) => ({
             name: c.name,
             value: c.value,
@@ -256,8 +272,11 @@ export class WSMessageHandler {
                     ? cookie.domain.substring(1)
                     : cookie.domain;
 
+                // 优先用接收方的域名（含端口），cookie.domain 可能不含端口
+                const applyDomain = domain || cookieDomain;
+                const scheme = cookie.secure === false ? 'http' : 'https';
                 await chrome.cookies.set({
-                    url: `https://${cookieDomain}${cookie.path || '/'}`,
+                    url: `${scheme}://${applyDomain}${cookie.path || '/'}`,
                     name: cookie.name,
                     value: cookie.value,
                     path: cookie.path || '/',
