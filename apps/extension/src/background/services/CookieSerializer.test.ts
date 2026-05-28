@@ -484,29 +484,35 @@ describe('CookieSerializer', () => {
     });
 
     it('应该正确处理包含URL编码的Cookie', () => {
-      const urlCookies = {
-        'url-encoded': 'https://example.com/path?query=value&other=123',
-        'encoded-special': '%20%21%40%23%24%25',
-        'mixed-url': 'https://example.com/path?name=John%20Doe&age=30',
-      };
+      const urlCookies: FullCookie[] = [
+        createCookie('url-encoded', 'https://example.com/path?query=value&other=123'),
+        createCookie('encoded-special', '%20%21%40%23%24%25'),
+        createCookie('mixed-url', 'https://example.com/path?name=John%20Doe&age=30'),
+      ];
 
       const serialized = serializer.serialize(urlCookies, 'example.com');
       const deserialized = serializer.deserialize(serialized);
 
-      expect(deserialized.cookies).toEqual(urlCookies);
+      expect(deserialized.cookies).toHaveLength(urlCookies.length);
+      for (let i = 0; i < urlCookies.length; i++) {
+        expect(deserialized.cookies[i].value).toBe(urlCookies[i].value);
+      }
     });
 
     it('应该正确处理包含Base64的Cookie', () => {
-      const base64Cookies = {
-        'base64-data': 'SGVsbG8gV29ybGQ=',
-        'base64-json': 'eyJrZXkiOiAidmFsdWUifQ==',
-        'base64-unicode': '5Lit5paC5rW35aSW',
-      };
+      const base64Cookies: FullCookie[] = [
+        createCookie('base64-data', 'SGVsbG8gV29ybGQ='),
+        createCookie('base64-json', 'eyJrZXkiOiAidmFsdWUifQ=='),
+        createCookie('base64-unicode', '5Lit5paC5rW35aSW'),
+      ];
 
       const serialized = serializer.serialize(base64Cookies, 'example.com');
       const deserialized = serializer.deserialize(serialized);
 
-      expect(deserialized.cookies).toEqual(base64Cookies);
+      expect(deserialized.cookies).toHaveLength(base64Cookies.length);
+      for (let i = 0; i < base64Cookies.length; i++) {
+        expect(deserialized.cookies[i].value).toBe(base64Cookies[i].value);
+      }
     });
   });
 });

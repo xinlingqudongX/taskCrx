@@ -29,6 +29,16 @@ export const ERROR_CODES = {
     INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
+/** P2P 连接配置 */
+export const P2P_CONFIG = {
+    ICE_SERVERS: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+    ],
+    CONNECTION_TIMEOUT: 15_000,
+    DATA_CHANNEL_NAME: 'cookie-share',
+} as const;
+
 /** API 路径 */
 export const ROUTES = {
     WEBSOCKET: '/ws',

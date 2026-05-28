@@ -610,8 +610,6 @@ export interface NetworkMonitorConfig {
 export interface WSConnectionConfig {
     serverUrl: string;
     roomId: string;
-    userId: string;
-    userName?: string;
     autoReconnect?: boolean;
     autoApplyCookies?: boolean;
 }
@@ -620,7 +618,10 @@ export interface WSConnectionConfig {
 export interface WSConnectionStatus {
     connected: boolean;
     roomId: string | null;
+    /** 服务端分配的匿名 userId，未连接时为 null */
     userId: string | null;
+    /** 服务端分配的随机昵称，未连接时为 null */
+    userName: string | null;
     onlineUsers: number;
     lastError?: string;
 }

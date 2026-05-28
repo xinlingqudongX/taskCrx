@@ -4,15 +4,26 @@
  */
 
 export type RelayMessageType =
+    | 'assigned'       // 服务端分配匿名身份（连接建立后第一条）
     | 'join'           // 加入房间
     | 'leave'          // 离开房间
     | 'cookie-share'   // 共享 Cookie
+    | 'cookie-ack'     // Cookie 共享回执
     | 'cookie-request' // 请求 Cookie
     | 'cookie-response' // Cookie 响应
     | 'user-list'      // 用户列表更新
     | 'ping'           // 心跳
     | 'pong'           // 心跳响应
-    | 'error';         // 错误消息
+    | 'error'          // 错误消息
+    | 'rtc-offer'      // WebRTC Offer 信令
+    | 'rtc-answer'     // WebRTC Answer 信令
+    | 'rtc-ice';       // WebRTC ICE Candidate 信令
+
+/** 服务端分配的匿名身份 payload */
+export interface AssignedPayload {
+    userId: string;
+    userName: string;
+}
 
 export interface RelayMessage {
     type: RelayMessageType;
@@ -23,7 +34,9 @@ export interface RelayMessage {
 
 export interface JoinPayload {
     roomId: string;
-    userId: string;
+    /** 已废弃：userId 由服务端分配，客户端发送时被忽略 */
+    userId?: string;
+    /** 已废弃：userName 由服务端分配 */
     userName?: string;
 }
 
@@ -66,9 +79,31 @@ export interface UserInfo {
     connectedAt: number;
 }
 
+export interface CookieAckPayload {
+    domain: string;
+    cookieCount: number;
+    fromUserId: string;
+    fromUserName: string;
+}
+
 export interface ErrorPayload {
     code: string;
     message: string;
+}
+
+export interface RTCOfferPayload {
+    targetUserId: string;
+    offer: RTCSessionDescriptionInit;
+}
+
+export interface RTCAnswerPayload {
+    targetUserId: string;
+    answer: RTCSessionDescriptionInit;
+}
+
+export interface RTCIcePayload {
+    targetUserId: string;
+    candidate: RTCIceCandidateInit;
 }
 
 /**

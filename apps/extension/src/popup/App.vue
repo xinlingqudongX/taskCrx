@@ -114,6 +114,9 @@
                     <n-tag v-if="wsStatus.connected" type="info">
                         在线用户: {{ wsStatus.onlineUsers }}
                     </n-tag>
+                    <n-tag v-if="wsStatus.connected && wsStatus.userName" type="success">
+                        我: {{ wsStatus.userName }}
+                    </n-tag>
                 </n-space>
                 <n-space align="center">
                     <n-input
@@ -123,13 +126,8 @@
                     />
                     <n-input
                         v-model:value="wsConfig.roomId"
-                        placeholder="房间ID"
-                        style="width: 150px;"
-                    />
-                    <n-input
-                        v-model:value="wsConfig.userId"
-                        placeholder="用户ID"
-                        style="width: 150px;"
+                        placeholder="房间ID（团队约定）"
+                        style="width: 200px;"
                     />
                 </n-space>
                 <n-space align="center">
@@ -161,6 +159,32 @@
                 </n-space>
             </n-space>
         </n-card>
+
+        <!-- 共享Cookie域名选择弹窗 -->
+        <n-modal
+            v-model:show="shareModalVisible"
+            preset="dialog"
+            title="共享Cookie"
+        >
+            <n-form>
+                <n-form-item label="选择域名">
+                    <n-select
+                        v-model:value="shareDomain"
+                        :options="domainOptions"
+                        placeholder="请选择要共享Cookie的域名"
+                        filterable
+                    />
+                </n-form-item>
+            </n-form>
+            <template #action>
+                <n-space>
+                    <n-button @click="shareModalVisible = false">取消</n-button>
+                    <n-button @click="confirmShareCookies" type="primary" :loading="shareLoading">
+                        确认共享
+                    </n-button>
+                </n-space>
+            </template>
+        </n-modal>
 
         <!-- 任务区域 -->
         <n-card title="任务列表">
@@ -510,9 +534,11 @@ const wsLoading = ref(false);
 const wsConfig = reactive({
     serverUrl: '',
     roomId: '',
-    userId: '',
 });
-const wsStatus = ref({ connected: false, roomId: null, userId: null, onlineUsers: 0 });
+const wsStatus = ref({ connected: false, roomId: null, userId: null, userName: null, onlineUsers: 0 });
+const shareModalVisible = ref(false);
+const shareDomain = ref(null);
+const shareLoading = ref(false);
 
 const formValue = reactive({
     domain: "",
@@ -912,20 +938,23 @@ checkCookieStatus();
 
 // WebSocket 连接相关方法
 const wsConnect = async () => {
-    if (!wsConfig.serverUrl || !wsConfig.roomId || !wsConfig.userId) {
-        alert('请填写完整的连接信息');
+    if (!wsConfig.serverUrl || !wsConfig.roomId) {
+        alert('请填写服务器地址和房间ID');
         return;
     }
     wsLoading.value = true;
     try {
-        const token = btoa(`${wsConfig.userId}:${Date.now()}:simple`);
         const result = await chrome.runtime.sendMessage({
             type: 'wsConnect',
             config: wsConfig,
-            token,
         });
         if (result?.ok) {
-            await refreshWsStatus();
+            // WebSocket 连接是异步的，轮询等待连接就绪
+            for (let i = 0; i < 10; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                await refreshWsStatus();
+                if (wsStatus.value.connected) break;
+            }
         } else {
             alert('连接失败: ' + (result?.error || '未知错误'));
         }
@@ -938,7 +967,7 @@ const wsConnect = async () => {
 
 const wsDisconnect = async () => {
     await chrome.runtime.sendMessage({ type: 'wsDisconnect' });
-    wsStatus.value = { connected: false, roomId: null, userId: null, onlineUsers: 0 };
+    wsStatus.value = { connected: false, roomId: null, userId: null, userName: null, onlineUsers: 0 };
 };
 
 const refreshWsStatus = async () => {
@@ -946,22 +975,36 @@ const refreshWsStatus = async () => {
         const status = await chrome.runtime.sendMessage({ type: 'wsGetStatus' });
         wsStatus.value = status;
     } catch {
-        wsStatus.value = { connected: false, roomId: null, userId: null, onlineUsers: 0 };
+        wsStatus.value = { connected: false, roomId: null, userId: null, userName: null, onlineUsers: 0 };
     }
 };
 
-const openShareModal = async () => {
-    const domain = prompt('请输入要共享Cookie的域名:');
-    if (domain) {
+const openShareModal = () => {
+    shareDomain.value = null;
+    shareModalVisible.value = true;
+};
+
+const confirmShareCookies = async () => {
+    if (!shareDomain.value) {
+        alert('请选择要共享Cookie的域名');
+        return;
+    }
+    shareLoading.value = true;
+    try {
         const result = await chrome.runtime.sendMessage({
             type: 'wsShareCookies',
-            domain,
+            domain: shareDomain.value,
         });
         if (result?.ok) {
-            alert(`已共享 ${domain} 的 Cookie`);
+            shareModalVisible.value = false;
+            alert(`已共享 ${shareDomain.value} 的 Cookie`);
         } else {
             alert('共享失败: ' + (result?.error || '未知错误'));
         }
+    } catch (error) {
+        alert('共享失败: ' + error.message);
+    } finally {
+        shareLoading.value = false;
     }
 };
 

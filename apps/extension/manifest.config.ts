@@ -4,7 +4,7 @@ import packageJson from "./package.json";
 const isDev = process.env.NODE_ENV === "development";
 
 const cspPolicy = isDev
-    ? "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://localhost:5173 ws://localhost:5173;"
+    ? "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*;"
     : "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self';";
 
 export default defineManifest({

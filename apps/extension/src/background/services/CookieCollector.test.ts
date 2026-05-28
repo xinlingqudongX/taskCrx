@@ -51,9 +51,7 @@ describe('CookieCollector', () => {
       expect(result[0].domain).toBe('.example.com');
       expect(result[0].httpOnly).toBe(false);
       expect(result[0].secure).toBe(true);
-      expect(chrome.cookies.getAll).toHaveBeenCalledWith({
-        url: 'https://example.com',
-      });
+      expect(chrome.cookies.getAll).toHaveBeenCalledWith({});
     });
 
     it('应该处理空Cookie情况', async () => {
@@ -86,9 +84,7 @@ describe('CookieCollector', () => {
 
       await collector.collectCookies('https://example.com');
 
-      expect(chrome.cookies.getAll).toHaveBeenCalledWith({
-        url: 'https://example.com',
-      });
+      expect(chrome.cookies.getAll).toHaveBeenCalledWith({});
     });
 
     it('应该规范化域名（移除路径）', async () => {
@@ -96,9 +92,7 @@ describe('CookieCollector', () => {
 
       await collector.collectCookies('example.com/path/to/page');
 
-      expect(chrome.cookies.getAll).toHaveBeenCalledWith({
-        url: 'https://example.com',
-      });
+      expect(chrome.cookies.getAll).toHaveBeenCalledWith({});
     });
 
     it('应该规范化域名（转换为小写）', async () => {
@@ -106,9 +100,7 @@ describe('CookieCollector', () => {
 
       await collector.collectCookies('EXAMPLE.COM');
 
-      expect(chrome.cookies.getAll).toHaveBeenCalledWith({
-        url: 'https://example.com',
-      });
+      expect(chrome.cookies.getAll).toHaveBeenCalledWith({});
     });
 
     it('应该抛出错误当域名为空', async () => {

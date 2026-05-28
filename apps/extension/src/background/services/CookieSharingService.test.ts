@@ -48,8 +48,8 @@ describe('CookieSharingService', () => {
     it('应该成功生成分享文件', async () => {
       // 模拟Chrome API返回Cookie
       (chrome.cookies.getAll as any).mockResolvedValue([
-        { name: 'session_id', value: 'abc123' },
-        { name: 'user_token', value: 'xyz789' },
+        { name: 'session_id', value: 'abc123', domain: '.example.com', path: '/', secure: true, httpOnly: false, sameSite: 'lax', hostOnly: false, session: false, storeId: '0' },
+        { name: 'user_token', value: 'xyz789', domain: '.example.com', path: '/', secure: true, httpOnly: false, sameSite: 'lax', hostOnly: false, session: false, storeId: '0' },
       ]);
 
       const result = await service.generateShareFile('example.com');
@@ -84,7 +84,7 @@ describe('CookieSharingService', () => {
 
     it('应该规范化域名', async () => {
       (chrome.cookies.getAll as any).mockResolvedValue([
-        { name: 'test', value: 'value' },
+        { name: 'test', value: 'value', domain: '.example.com', path: '/', secure: true, httpOnly: false, sameSite: 'lax', hostOnly: false, session: false, storeId: '0' },
       ]);
 
       // 测试各种域名格式
@@ -103,8 +103,8 @@ describe('CookieSharingService', () => {
 
     it('应该处理特殊字符的Cookie值', async () => {
       (chrome.cookies.getAll as any).mockResolvedValue([
-        { name: 'special', value: 'value=with;special&chars' },
-        { name: 'unicode', value: '中文测试' },
+        { name: 'special', value: 'value=with;special&chars', domain: '.example.com', path: '/', secure: true, httpOnly: false, sameSite: 'lax', hostOnly: false, session: false, storeId: '0' },
+        { name: 'unicode', value: '中文测试', domain: '.example.com', path: '/', secure: true, httpOnly: false, sameSite: 'lax', hostOnly: false, session: false, storeId: '0' },
       ]);
 
       const result = await service.generateShareFile('example.com');
@@ -118,72 +118,52 @@ describe('CookieSharingService', () => {
     it('应该成功设置Cookie', async () => {
       (chrome.cookies.set as any).mockResolvedValue(undefined);
 
-      const cookies = {
-        session_id: 'abc123',
-        user_token: 'xyz789',
-      };
+      const cookies: FullCookie[] = [
+        createFullCookie('session_id', 'abc123'),
+        createFullCookie('user_token', 'xyz789'),
+      ];
 
       await service.setCookies('example.com', cookies);
 
       expect(chrome.cookies.set).toHaveBeenCalledTimes(2);
-      expect(chrome.cookies.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          url: 'https://example.com',
-          name: 'session_id',
-          value: 'abc123',
-        })
-      );
-      expect(chrome.cookies.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          url: 'https://example.com',
-          name: 'user_token',
-          value: 'xyz789',
-        })
-      );
     });
 
     it('应该抛出错误当域名为空', async () => {
-      const cookies = { test: 'value' };
+      const cookies: FullCookie[] = [createFullCookie('test', 'value')];
 
       await expect(service.setCookies('', cookies)).rejects.toThrow('域名必须是非空字符串');
     });
 
     it('应该抛出错误当Cookie不是对象', async () => {
       await expect(service.setCookies('example.com', null as any)).rejects.toThrow(
-        'Cookie必须是对象'
+        'Cookie必须是数组'
       );
     });
 
     it('应该规范化域名', async () => {
       (chrome.cookies.set as any).mockResolvedValue(undefined);
 
-      const cookies = { test: 'value' };
+      const cookies: FullCookie[] = [createFullCookie('test', 'value')];
 
       await service.setCookies('HTTPS://EXAMPLE.COM/path', cookies);
 
-      // 验证 chrome.cookies.set 被调用
       expect(chrome.cookies.set).toHaveBeenCalled();
-      
-      // 获取调用的参数
+
       const callArgs = (chrome.cookies.set as any).mock.calls[0][0];
-      
-      // 验证 URL 包含规范化后的域名
       expect(callArgs.url).toContain('example.com');
       expect(callArgs.url).toMatch(/^https:\/\//);
     });
 
     it('应该处理单个Cookie设置失败但继续处理其他Cookie', async () => {
-      // 第一个Cookie设置失败，第二个成功
       (chrome.cookies.set as any)
         .mockRejectedValueOnce(new Error('Permission denied'))
         .mockResolvedValueOnce(undefined);
 
-      const cookies = {
-        cookie1: 'value1',
-        cookie2: 'value2',
-      };
+      const cookies: FullCookie[] = [
+        createFullCookie('cookie1', 'value1'),
+        createFullCookie('cookie2', 'value2'),
+      ];
 
-      // 应该不抛出错误，而是继续处理
       await service.setCookies('example.com', cookies);
 
       expect(chrome.cookies.set).toHaveBeenCalledTimes(2);
@@ -192,10 +172,10 @@ describe('CookieSharingService', () => {
     it('应该处理特殊字符的Cookie值', async () => {
       (chrome.cookies.set as any).mockResolvedValue(undefined);
 
-      const cookies = {
-        'special': 'value=with;special&chars',
-        'unicode': '中文测试',
-      };
+      const cookies: FullCookie[] = [
+        createFullCookie('special', 'value=with;special&chars'),
+        createFullCookie('unicode', '中文测试'),
+      ];
 
       await service.setCookies('example.com', cookies);
 

@@ -1,6 +1,7 @@
 /**
  * Team Session Relay Worker 入口
  * 接受插件的 WebSocket 连接，用于 Cookie 共享
+ * 匿名访问模式：roomId 即访问凭证，无需 token
  */
 
 import { handleWebSocketRoute } from './routes/websocket';
@@ -9,7 +10,6 @@ export { RelayRoom } from './durable-objects/relay-room';
 
 interface Env {
     RELAY_ROOM: DurableObjectNamespace;
-    AUTH_SECRET: string;
 }
 
 export default {
@@ -25,7 +25,7 @@ export default {
             service: 'team-session-relay',
             version: '1.0.0',
             endpoints: {
-                websocket: '/ws?token=xxx&userId=xxx&roomId=xxx',
+                websocket: '/ws?roomId=xxx',
                 health: '/health',
             },
         }), {

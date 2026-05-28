@@ -586,10 +586,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
             wsHandler = new WSMessageHandler({
                 serverUrl: config.serverUrl,
-                token: msg.token,
-                userId: config.userId,
                 roomId: config.roomId,
-                userName: config.userName,
                 autoApplyCookies: config.autoApplyCookies ?? true,
             });
             wsHandler.connect();
@@ -641,7 +638,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const status: WSConnectionStatus = {
             connected: wsHandler?.isConnected ?? false,
             roomId: wsConnectionConfig?.roomId ?? null,
-            userId: wsConnectionConfig?.userId ?? null,
+            userId: wsHandler?.getMyUserId() ?? null,
+            userName: wsHandler?.getMyUserName() ?? null,
             onlineUsers: wsHandler?.getOnlineUsers().length ?? 0,
         };
         sendResponse(status);

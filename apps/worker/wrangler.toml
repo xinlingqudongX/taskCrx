@@ -10,7 +10,3 @@ class_name = "RelayRoom"
 [[migrations]]
 tag = "v1"
 new_classes = ["RelayRoom"]
-
-[vars]
-# AUTH_SECRET 必须通过 wrangler secret put 设置，不要写在配置文件中
-# 运行: wrangler secret put AUTH_SECRET
