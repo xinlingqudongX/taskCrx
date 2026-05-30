@@ -35,6 +35,10 @@ export class PeerConnection {
     }
 
     async connect(): Promise<void> {
+        if (typeof RTCPeerConnection === 'undefined') {
+            this.emit('error', new Error('当前环境不支持 WebRTC（Service Worker 无 RTCPeerConnection）'));
+            return;
+        }
         try {
             this.pc = new RTCPeerConnection({
                 iceServers: P2P_CONFIG.ICE_SERVERS,

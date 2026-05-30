@@ -111,12 +111,6 @@
                     <n-tag :type="wsStatus.connected ? 'success' : 'default'">
                         连接状态: {{ wsStatus.connected ? '已连接' : '未连接' }}
                     </n-tag>
-                    <n-tag v-if="wsStatus.connected" type="info">
-                        在线用户: {{ wsStatus.onlineUsers }}
-                    </n-tag>
-                    <n-tag v-if="wsStatus.connected && wsStatus.userName" type="success">
-                        我: {{ wsStatus.userName }}
-                    </n-tag>
                 </n-space>
                 <n-space align="center">
                     <n-input
@@ -165,9 +159,13 @@
             <n-space vertical size="small">
                 <n-alert v-for="(item, index) in pendingCookies" :key="index" type="info" style="margin-bottom: 8px;">
                     <template #header>
-                        {{ item.fromUserId || '未知用户' }} 共享了 {{ item.domain }} 的 {{ item.cookies.length }} 个 Cookie
+                        {{ item.domain || '未知域名' }}
                     </template>
-                    <n-space>
+                    <n-text>来自: {{ item.fromUserId || '未知用户' }} | Cookie: {{ item.cookies.length }} 个</n-text>
+                    <n-text v-if="item.localStorage && Object.keys(item.localStorage).length > 0">
+                        | localStorage: {{ Object.keys(item.localStorage).length }} 项
+                    </n-text>
+                    <n-space style="margin-top: 8px;">
                         <n-button size="tiny" type="success" @click="approvePendingCookies(index)">应用</n-button>
                         <n-button size="tiny" type="error" @click="rejectPendingCookies(index)">拒绝</n-button>
                     </n-space>
@@ -191,6 +189,9 @@
                         multiple
                     />
                 </n-form-item>
+                <n-checkbox v-model:checked="shareIncludeLocalStorage">
+                    同时共享 localStorage
+                </n-checkbox>
             </n-form>
             <template #action>
                 <n-space>
@@ -484,7 +485,7 @@
     </n-message-provider>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, h } from "vue";
 import {
     NButton,
@@ -554,6 +555,7 @@ const wsConfig = reactive({
 const wsStatus = ref({ connected: false, roomId: null, userId: null, userName: null, onlineUsers: 0 });
 const shareModalVisible = ref(false);
 const shareDomain = ref([]);
+const shareIncludeLocalStorage = ref(false);
 const shareLoading = ref(false);
 const pendingCookies: any = ref([]);
 
@@ -566,17 +568,25 @@ const loadPendingCookies = async () => {
 };
 loadPendingCookies();
 
+// 监听 storage 变化，实时刷新待确认列表
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes['pending_shared_cookies']) {
+        pendingCookies.value = changes['pending_shared_cookies'].newValue || [];
+    }
+});
+
 const approvePendingCookies = async (index: number) => {
     const item = pendingCookies.value[index];
     if (!item) return;
     try {
         const result = await chrome.runtime.sendMessage({
             type: 'wsApplyPendingCookies',
-            cookies: [{ domain: item.domain, cookies: item.cookies }],
+            cookies: [{ domain: item.domain, cookies: item.cookies, localStorage: item.localStorage }],
         });
         if (result?.ok) {
             pendingCookies.value.splice(index, 1);
-            alert(`已应用 ${item.domain} 的 ${item.cookies.length} 个 Cookie`);
+            const lsCount = item.localStorage ? Object.keys(item.localStorage).length : 0;
+            alert(`已应用 ${item.domain} 的 ${item.cookies.length} 个 Cookie${lsCount > 0 ? ` 和 ${lsCount} 个 localStorage 项` : ''}`);
         } else {
             alert('应用失败: ' + (result?.error || '未知错误'));
         }
@@ -587,12 +597,13 @@ const approvePendingCookies = async (index: number) => {
 
 const rejectPendingCookies = async (index: number) => {
     pendingCookies.value.splice(index, 1);
-    // 更新 storage
-    await chrome.runtime.sendMessage({ type: 'wsRejectPendingCookies' });
-    // 如果还有其他待确认项，重新写入
+    // 直接用剩余数组更新 storage，避免 background 清除全部
     if (pendingCookies.value.length > 0) {
         chrome.storage.local.set({ pending_shared_cookies: pendingCookies.value });
         chrome.action.setBadgeText({ text: String(pendingCookies.value.length) });
+    } else {
+        chrome.storage.local.remove("pending_shared_cookies");
+        chrome.action.setBadgeText({ text: "" });
     }
 };
 
@@ -1043,6 +1054,7 @@ const refreshWsStatus = async () => {
 
 const openShareModal = () => {
     shareDomain.value = [];
+    shareIncludeLocalStorage.value = false;
     shareModalVisible.value = true;
 };
 
@@ -1056,6 +1068,7 @@ const confirmShareCookies = async () => {
         const result = await chrome.runtime.sendMessage({
             type: 'wsShareCookies',
             domains: shareDomain.value,
+            includeLocalStorage: shareIncludeLocalStorage.value,
         });
         if (result?.ok) {
             shareModalVisible.value = false;

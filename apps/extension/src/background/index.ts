@@ -20,6 +20,68 @@ let wsConnectionConfig: WSConnectionConfig | null = null;
 
 const WS_CONFIG_KEY = "cc_ws_config_v1";
 
+/**
+ * 从指定域名的标签页收集 localStorage
+ * 如果没有打开该域名的标签页，自动创建一个（后台），收集后关闭
+ */
+async function collectLocalStorageFromDomain(domain: string): Promise<Record<string, string>> {
+    const readAllLS = () => {
+        const data: Record<string, string> = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) data[key] = localStorage.getItem(key) || '';
+        }
+        return data;
+    };
+
+    try {
+        // 先查找已打开的该域名标签页
+        let tabs = await chrome.tabs.query({ url: [`https://${domain}/*`, `http://${domain}/*`] });
+        let createdTab = false;
+
+        if (!tabs.length) {
+            // 没有打开的标签页，自动创建一个后台标签页
+            const tab = await chrome.tabs.create({ url: `https://${domain}`, active: false });
+            createdTab = true;
+            // 等待页面加载完成
+            await new Promise<void>((resolve) => {
+                const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
+                    if (tabId === tab.id && info.status === 'complete') {
+                        chrome.tabs.onUpdated.removeListener(listener);
+                        resolve();
+                    }
+                };
+                chrome.tabs.onUpdated.addListener(listener);
+                // 超时 10 秒
+                setTimeout(() => {
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                }, 10000);
+            });
+            tabs = await chrome.tabs.query({ url: [`https://${domain}/*`, `http://${domain}/*`] });
+        }
+
+        if (!tabs.length || !tabs[0].id) {
+            return {};
+        }
+
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: tabs[0].id! },
+            func: readAllLS,
+        });
+
+        // 如果是我们创建的标签页，关闭它
+        if (createdTab && tabs[0].id) {
+            await chrome.tabs.remove(tabs[0].id).catch(() => {});
+        }
+
+        return results?.[0]?.result || {};
+    } catch (e) {
+        console.warn(`收集 ${domain} 的 localStorage 失败:`, e);
+        return {};
+    }
+}
+
 // 修改存储相关函数以支持同步
 async function getTasks(): Promise<Task[]> {
     return new Promise((res) => {
@@ -629,11 +691,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({ ok: false, error: "WebSocket 未连接" });
             return true;
         }
-        // 支持多域名共享
         const domains: string[] = msg.domains || (msg.domain ? [msg.domain] : []);
-        Promise.all(domains.map((d: string) => wsHandler!.shareDomainCookies(d)))
-            .then(() => sendResponse({ ok: true }))
-            .catch((error: any) => sendResponse({ ok: false, error: error.message }));
+        const includeLocalStorage: boolean = msg.includeLocalStorage || false;
+
+        (async () => {
+            // 按域名收集 localStorage
+            const lsMap: Record<string, Record<string, string>> = {};
+            if (includeLocalStorage) {
+                for (const domain of domains) {
+                    lsMap[domain] = await collectLocalStorageFromDomain(domain);
+                }
+            }
+
+            try {
+                await Promise.all(domains.map((d: string) => wsHandler!.shareDomainCookies(d, lsMap[d])));
+                sendResponse({ ok: true });
+            } catch (error: any) {
+                sendResponse({ ok: false, error: error.message });
+            }
+        })();
         return true;
     }
 
@@ -651,8 +727,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({ ok: false, error: "WebSocket 未连接" });
             return true;
         }
-        const pending = msg.cookies as { domain: string; cookies: any[] }[];
-        Promise.all(pending.map((p) => wsHandler!.applySharedCookies(p.domain, p.cookies)))
+        const pending = msg.cookies as { domain: string; cookies: any[]; localStorage?: Record<string, string> }[];
+        Promise.all(pending.map((p) => wsHandler!.applySharedCookies(p.domain, p.cookies, p.localStorage)))
             .then(() => {
                 chrome.storage.local.remove("pending_shared_cookies");
                 chrome.action.setBadgeText({ text: "" });

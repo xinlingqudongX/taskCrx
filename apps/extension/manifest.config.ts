@@ -24,6 +24,7 @@ export default defineManifest({
         "clipboardRead",
         "clipboardWrite",
         "debugger",
+        "offscreen",
     ],
     optional_permissions: [],
     host_permissions: [

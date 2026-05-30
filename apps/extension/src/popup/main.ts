@@ -11,6 +11,7 @@ import {
     NLayoutHeader,
     NCard,
     NModal,
+    NCheckbox,
 } from "naive-ui";
 
 const app = createApp(App);
@@ -24,6 +25,7 @@ app.component("NButton", NButton)
     .component("NSpace", NSpace)
     .component("NLayoutHeader", NLayoutHeader)
     .component("NCard", NCard)
-    .component("NModal", NModal);
+    .component("NModal", NModal)
+    .component("NCheckbox", NCheckbox);
 
 app.mount("#app");

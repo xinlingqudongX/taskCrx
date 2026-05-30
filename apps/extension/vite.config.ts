@@ -34,6 +34,7 @@ export default defineConfig({
         rollupOptions: {
             input: {
                 popup: path.resolve(__dirname, "src/popup/index.html"),
+                offscreen: path.resolve(__dirname, "src/offscreen/index.html"),
             },
         },
         sourcemap: true,
